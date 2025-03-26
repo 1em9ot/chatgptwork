@@ -1,0 +1,106 @@
+2025-03-13 09:24:55,255 - INFO - ===== main.py 開始 =====
+2025-03-13 09:24:55,269 - INFO - config.json のバックアップを作成しました。
+2025-03-13 09:24:55,270 - INFO - modules/ ディレクトリが存在しません（初回実行または既に移動済み）。
+2025-03-13 09:24:55,271 - INFO - 重複フォルダ modules(1)/ は存在しません。
+2025-03-13 09:24:55,272 - WARNING - modules/ フォルダが存在しません。
+2025-03-13 09:24:55,275 - INFO - modules/ ディレクトリを作成しました。
+2025-03-13 09:24:55,279 - INFO - di_container.py を modules\di_container.py に移動しました。
+2025-03-13 09:24:55,282 - INFO - plugin_manager.py を modules\plugin_manager.py に移動しました。
+2025-03-13 09:24:55,285 - INFO - interfaces.py を modules\interfaces.py に移動しました。
+2025-03-13 09:24:55,288 - INFO - generate_dummy_csv.py を modules\generate_dummy_csv.py に移動しました。
+2025-03-13 09:24:55,291 - INFO - rename_log_file.py を modules\rename_log_file.py に移動しました。
+2025-03-13 09:24:55,294 - INFO - generate_dummy_json.py を modules\generate_dummy_json.py に移動しました。
+2025-03-13 09:24:55,296 - INFO - ast_transformer.py を modules\ast_transformer.py に移動しました。
+2025-03-13 09:24:55,299 - INFO - test_ast_transformer.py を modules\test_ast_transformer.py に移動しました。
+2025-03-13 09:24:55,302 - INFO - data_visualizer.py を modules\data_visualizer.py に移動しました。
+2025-03-13 09:24:55,304 - INFO - anova_analyzer.py を modules\anova_analyzer.py に移動しました。
+2025-03-13 09:24:55,307 - INFO - clustering_analyzer.py を modules\clustering_analyzer.py に移動しました。
+2025-03-13 09:24:55,310 - INFO - time_series_analyzer.py を modules\time_series_analyzer.py に移動しました。
+2025-03-13 09:24:55,313 - INFO - regression_analysis.py を modules\regression_analysis.py に移動しました。
+2025-03-13 09:24:55,315 - INFO - statistical_analyzer.py を modules\statistical_analyzer.py に移動しました。
+2025-03-13 09:24:55,318 - INFO - config_manager.py を modules\config_manager.py に移動しました。
+2025-03-13 09:24:55,321 - INFO - db_connector.py を modules\db_connector.py に移動しました。
+2025-03-13 09:24:55,324 - INFO - logger_log_file.py を modules\logger_log_file.py に移動しました。
+2025-03-13 09:24:55,327 - INFO - logger_impl.py を modules\logger_impl.py に移動しました。
+2025-03-13 09:24:56,635 - INFO - ユニットテスト成功。
+2025-03-13 09:24:57,902 - ERROR - Gist 更新スクリプトでエラー発生 (戻り値 1):
+
+Traceback (most recent call last):
+  File "c:\Users\User\.vscode\extensions\ms-python.debugpy-2025.4.1-win32-x64\bundled\libs\debugpy\_vendored\pydevd\pydevd.py", line 3710, in <module>
+    main()
+  File "c:\Users\User\.vscode\extensions\ms-python.debugpy-2025.4.1-win32-x64\bundled\libs\debugpy\_vendored\pydevd\pydevd.py", line 3695, in main
+    globals = debugger.run(setup["file"], None, None, is_module)
+  File "c:\Users\User\.vscode\extensions\ms-python.debugpy-2025.4.1-win32-x64\bundled\libs\debugpy\_vendored\pydevd\pydevd.py", line 2691, in run
+    return self._exec(is_module, entry_point_fn, module_name, file, globals, locals)
+  File "c:\Users\User\.vscode\extensions\ms-python.debugpy-2025.4.1-win32-x64\bundled\libs\debugpy\_vendored\pydevd\pydevd.py", line 2699, in _exec
+    globals = pydevd_runpy.run_path(file, globals, "__main__")
+  File "c:\Users\User\.vscode\extensions\ms-python.debugpy-2025.4.1-win32-x64\bundled\libs\debugpy\_vendored\pydevd\_pydevd_bundle\pydevd_runpy.py", line 309, in run_path
+    code, fname = _get_code_from_file(run_name, path_name)
+  File "c:\Users\User\.vscode\extensions\ms-python.debugpy-2025.4.1-win32-x64\bundled\libs\debugpy\_vendored\pydevd\_pydevd_bundle\pydevd_runpy.py", line 278, in _get_code_from_file
+    with io_open_code(decoded_path) as f:
+FileNotFoundError: [Errno 2] No such file or directory: 'P:\\chatgptwork\\update_gist.py'
+
+2025-03-13 09:24:57,903 - ERROR - Gist の更新に失敗しました。変更は保持されていますが、手動での確認が必要です。
+2025-03-13 09:24:57,904 - INFO - ===== main.py 終了 =====
+2025-03-13 16:22:40,099 - INFO - ===== main.py 開始 =====
+2025-03-13 16:22:40,118 - INFO - config.json のバックアップを作成しました。
+2025-03-13 16:22:40,514 - INFO - modules/ を modules.bak/ にバックアップしました。
+2025-03-13 16:22:40,515 - INFO - 重複フォルダ modules(1)/ は存在しません。
+2025-03-13 16:22:41,812 - INFO - ユニットテスト成功。
+2025-03-13 16:23:13,895 - ERROR - Gist 更新スクリプトでエラー発生 (戻り値 1):
+
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+gist not found: 53df2f17c3c9 f4c07c9e64be444d56f0
+
+2025-03-13 16:23:13,900 - ERROR - Gist の更新に失敗しました。変更は保持されていますが、手動での確認が必要です。
+2025-03-13 16:23:13,901 - INFO - ===== main.py 終了 =====
+2025-03-13 16:26:21,848 - INFO - ===== main.py 開始 =====
+2025-03-13 16:26:21,864 - INFO - config.json のバックアップを作成しました。
+2025-03-13 16:26:21,897 - INFO - 古いバックアップ modules.bak/ を削除しました。
+2025-03-13 16:26:22,006 - INFO - modules/ を modules.bak/ にバックアップしました。
+2025-03-13 16:26:22,007 - INFO - 重複フォルダ modules(1)/ は存在しません。
+2025-03-13 16:26:23,290 - INFO - ユニットテスト成功。
+2025-03-13 16:26:58,773 - ERROR - Gist 更新スクリプトでエラー発生 (戻り値 1):
+
+open modules/statistical_test_analyzer.py: The system cannot find the file specified.
+open modules/regression_analyzer.py: The system cannot find the file specified.
+
+2025-03-13 16:26:58,779 - ERROR - Gist の更新に失敗しました。変更は保持されていますが、手動での確認が必要です。
+2025-03-13 16:26:58,780 - INFO - ===== main.py 終了 =====
+2025-03-13 16:56:13,640 - INFO - ===== main.py 開始 =====
+2025-03-13 16:56:13,661 - INFO - config.json のバックアップを作成しました。
+2025-03-13 16:56:13,706 - INFO - 古いバックアップ modules.bak/ を削除しました。
+2025-03-13 16:56:13,872 - INFO - modules/ を modules.bak/ にバックアップしました。
+2025-03-13 16:56:13,873 - INFO - 重複フォルダ modules(1)/ は存在しません。
+2025-03-13 16:56:15,158 - INFO - ユニットテスト成功。
+2025-03-13 16:57:01,429 - ERROR - Gist 更新スクリプトでエラー発生 (戻り値 1):
+
+open modules/regression_analyzer.py: The system cannot find the file specified.
+
+2025-03-13 16:57:01,430 - ERROR - Gist の更新に失敗しました。変更は保持されていますが、手動での確認が必要です。
+2025-03-13 16:57:01,430 - INFO - ===== main.py 終了 =====
+2025-03-13 16:57:35,635 - INFO - ===== main.py 開始 =====
+2025-03-13 16:57:35,655 - INFO - config.json のバックアップを作成しました。
+2025-03-13 16:57:35,716 - INFO - 古いバックアップ modules.bak/ を削除しました。
+2025-03-13 16:57:35,844 - INFO - modules/ を modules.bak/ にバックアップしました。
+2025-03-13 16:57:35,846 - INFO - 重複フォルダ modules(1)/ は存在しません。
+2025-03-13 16:57:37,136 - INFO - ユニットテスト成功。
+2025-03-13 16:58:09,398 - INFO - Gist を更新しました。
+2025-03-13 16:58:09,399 - INFO - ===== main.py 終了 =====
