@@ -40,54 +40,7 @@ def ensure_folder_consistency():
         # バックアップが取れない場合は安全のため中断
         return False
 
-    # 2. 重複フォルダ modules(1)/ の整理・統合
-    if os.path.exists("modules(1)"):
-        logger.info("重複フォルダ modules(1)/ が存在します。統合処理を実行します。")
-        if not os.path.exists("modules"):
-            # modules/ が無ければ modules(1)/ をリネーム
-            try:
-                os.rename("modules(1)", "modules")
-                logger.info("modules(1)/ を modules/ にリネームしました。")
-            except Exception as e:
-                logger.error(f"modules(1)/ を modules/ にリネームできませんでした: {e}")
-                # リネームに失敗した場合はコピーで対処
-                if not os.path.exists("modules"):
-                    try:
-                        shutil.copytree("modules(1)", "modules")
-                        logger.info("modules(1)/ を modules/ にコピーしました。")
-                    except Exception as e2:
-                        logger.error(f"modules(1)/ から modules/ へのコピーに失敗しました: {e2}")
-        else:
-            # modules/ が存在する場合、modules(1)/ 内のファイルを modules/ に統合
-            for root, dirs, files in os.walk("modules(1)"):
-                rel_path = os.path.relpath(root, "modules(1)")
-                target_dir = "modules" if rel_path == "." else os.path.join("modules", rel_path)
-                if not os.path.exists(target_dir):
-                    try:
-                        os.makedirs(target_dir, exist_ok=True)
-                    except Exception as e:
-                        logger.warning(f"ディレクトリ {target_dir} の作成に失敗しました: {e}")
-                for file in files:
-                    src_path = os.path.join(root, file)
-                    dest_path = os.path.join(target_dir, file)
-                    try:
-                        if os.path.exists(dest_path):
-                            os.remove(dest_path)
-                            logger.info(f"既存のファイル {dest_path} を削除して上書きします。")
-                        shutil.move(src_path, dest_path)
-                        logger.info(f"{src_path} を {dest_path} に移動しました。")
-                    except Exception as e:
-                        logger.error(f"ファイル {src_path} の統合に失敗しました: {e}")
-            # 統合後、modules(1)/ フォルダを削除
-            try:
-                shutil.rmtree("modules(1)")
-                logger.info("統合完了後、modules(1)/ フォルダを削除しました。")
-            except Exception as e:
-                logger.error(f"modules(1)/ フォルダの削除に失敗しました: {e}")
-    else:
-        logger.info("重複フォルダ modules(1)/ は存在しません。")
-
-    # 3. modules/ フォルダ内のファイルチェック（必要なファイルが無い場合はバックアップから復元）
+    # modules/ フォルダ内のファイルチェック（必要なファイルが無い場合はバックアップから復元）
     if os.path.exists("modules"):
         py_files = [f for f in os.listdir("modules") if f.endswith(".py")]
         if len(py_files) == 0:
