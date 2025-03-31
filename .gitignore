@@ -1,6 +1,18 @@
-
-desktop.ini
-
+# Python のキャッシュやバイトコード
 __pycache__/
+*.py[cod]
+*$py.class
+
+# バックアップファイル（設定ファイルなどのバックアップが含まれる場合）
+*.bak
+
+# Windows のシステムファイル
+desktop.ini
+Thumbs.db
+
+# 一時ディレクトリ
+.tmp.driveupload/
+logs/
+
 *.pyc
 *.pyo
