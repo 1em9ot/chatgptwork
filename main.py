@@ -391,7 +391,7 @@ def auto_commit_and_push():
         # コミット実行。何も変更がなければ "nothing to commit" と出力されるので、それは成功扱いとする
         result_commit = subprocess.run(
             ["git", "commit", "-m", "自動コミット by main.py"],
-            check=False, capture_output=True, text=True
+            check=False, capture_output=True, text=True, errors="replace"
         )
         stdout_lower = (result_commit.stdout or "").lower()
         stderr_lower = (result_commit.stderr or "").lower()
