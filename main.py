@@ -19,7 +19,8 @@ logger.addHandler(console_handler)
 def full_cleanup():
     """
     ローカル環境を完全にクリーンアップする関数です。
-    ※ tracked な変更は保持し、git clean -xdf により未追跡ファイル等を削除します。
+    ※ tracked な変更は保持します（git reset --hard は実行しません）。
+    未追跡ファイル・ディレクトリは削除します。
     """
     logging.shutdown()  # ログファイルのロック解除
     print("【全環境クリーンアップ開始】")
@@ -30,7 +31,7 @@ def full_cleanup():
     except Exception as e:
         print(f"git clean に失敗しました: {e}")
     
-    # バックアップフォルダ・ファイルの削除
+    # バックアップフォルダとバックアップファイルの削除
     for backup_dir in ["modules.bak"]:
         if os.path.exists(backup_dir):
             try:
@@ -70,7 +71,7 @@ def full_cleanup():
                 except Exception as e:
                     print(f"{file_path} の削除に失敗しました: {e}")
     
-    # Gitインデックスから、トラッキング中の desktop.ini のみ削除
+    # Gitインデックスから、トラッキング中の desktop.ini を除外
     if removed_files:
         tracked_files = []
         for file in removed_files:
@@ -85,7 +86,7 @@ def full_cleanup():
             except Exception as e:
                 print(f"Gitインデックスからの desktop.ini 除外に失敗: {e}")
     
-    # .gitignore の更新
+    # .gitignore の更新（desktop.ini は既に追加済み）
     gitignore_path = ".gitignore"
     try:
         if os.path.exists(gitignore_path):
@@ -101,6 +102,31 @@ def full_cleanup():
         print(f".gitignore の更新に失敗しました: {e}")
     
     print("【全環境クリーンアップ終了】")
+
+
+def update_gitignore_python_entries():
+    """
+    Pythonの一時ファイルやディレクトリを自動で .gitignore に追加する。
+    例: __pycache__/, *.pyc, *.pyo
+    """
+    entries_to_add = ["__pycache__/", "*.pyc", "*.pyo"]
+    gitignore_path = ".gitignore"
+    current_lines = []
+    if os.path.exists(gitignore_path):
+        with open(gitignore_path, "r", encoding="utf-8") as f:
+            current_lines = [line.strip() for line in f.readlines()]
+    else:
+        current_lines = []
+    new_entries = []
+    for entry in entries_to_add:
+        if entry not in current_lines:
+            new_entries.append(entry)
+    if new_entries:
+        with open(gitignore_path, "a", encoding="utf-8") as f:
+            f.write("\n" + "\n".join(new_entries) + "\n")
+        print("'.gitignore' に Python 一時ファイルのエントリを追加しました: " + ", ".join(new_entries))
+    else:
+        print("'.gitignore' は既に Python 一時ファイルのエントリを含んでいます。")
 
 
 def fix_test_imports():
@@ -391,7 +417,7 @@ def merge_into_main():
     """
     現在のブランチ（old側）の内容で、リモートの main ブランチにマージし、
     マージ後に現在のブランチを削除する。
-    ※現在のブランチが main であれば何もせず終了します。
+    ※現在のブランチが main の場合は何もしません。
     """
     try:
         current_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -466,6 +492,9 @@ if __name__ == "__main__":
     # 1. 全環境クリーンアップ（※tracked な変更は保持）
     full_cleanup()
     
+    # 1.5. Python の一時ファイル等を .gitignore に追加
+    update_gitignore_python_entries()
+    
     # 2. テストファイルの import 文自動修正
     fix_test_imports()
     
@@ -496,7 +525,7 @@ if __name__ == "__main__":
     if not update_config():
         print("config.json の更新に失敗しました。")
         sys.exit(1)
-    
+
     # 7. test/ フォルダ内からユニットテストを実行
     if not run_tests():
         print("ユニットテストに失敗したため、変更を元に戻します。")
