@@ -16,29 +16,14 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-
 def full_cleanup():
     """
     ローカル環境を完全にクリーンアップする関数です。
-    ・logging.shutdown() によりログハンドラを閉じ、main.log のロックを解除
-    ・Gitリポジトリを HEAD にリセットし、未追跡ファイルを全削除 (git clean -xdf)
-    ・バックアップフォルダ、__pycache__、desktop.ini などの不要ファイルを削除する
-    ・.gitignore に desktop.ini を追加して以降の追跡から除外する
+    ※今回は git reset --hard は実行せず、作業ディレクトリの変更は保持します。
     """
-    logging.shutdown()  # ログファイルのロック解除
+    # ログファイルのロックを解除
+    logging.shutdown()
     print("【全環境クリーンアップ開始】")
-    
-    # try:
-    #     """
-    #     subprocess.run(["git", "reset", "--hard", "HEAD"], check=True)
-    #     このコマンドは、作業ディレクトリのすべての変更を「HEAD」の状態にリセット（つまり破棄）します。
-    #     そのため、たとえ main.py を含むファイルに変更があっても、このコマンドが実行されると変更がすべて元に戻され、
-    #     「nothing to commit, working tree clean」と表示されるようになります。
-    #     """
-    #     subprocess.run(["git", "reset", "--hard", "HEAD"], check=True)
-    #     print("Gitリポジトリを HEAD にリセットしました。")
-    # except Exception as e:
-    #     print(f"Git reset に失敗しました: {e}")
     
     try:
         subprocess.run(["git", "clean", "-xdf"], check=True)
@@ -86,7 +71,7 @@ def full_cleanup():
                 except Exception as e:
                     print(f"{file_path} の削除に失敗しました: {e}")
     
-    # Git インデックスから、トラッキングされている desktop.ini のみ削除
+    # Gitインデックスからトラッキング中の desktop.ini の除外
     if removed_files:
         tracked_files = []
         for file in removed_files:
@@ -122,7 +107,7 @@ def full_cleanup():
 def fix_test_imports():
     """
     modules/test_ast_transformer.py 内の import 文を自動修正する。
-    'from ast_transformer import' を 'from modules.ast_transformer import' に変更。
+    'from ast_transformer import' を 'from modules.ast_transformer import' に変更する。
     """
     test_file = os.path.join("modules", "test_ast_transformer.py")
     if os.path.exists(test_file):
@@ -251,7 +236,7 @@ def move_py_files():
         print(f"{modules_dir}/ を作成しました。")
     ensure_init_file()
     for filename in os.listdir("."):
-        if (filename.endswith(".py") and filename not in ("main.py", "config.json", "update_gist.py") 
+        if (filename.endswith(".py") and filename not in ("main.py", "config.json", "update_gist.py")
             and "test" not in filename.lower()):
             src = filename
             dst = os.path.join(modules_dir, filename)
@@ -336,6 +321,43 @@ def run_tests():
         return False
 
 
+def resolve_merge_conflicts():
+    """
+    Git merge コンフリクトが発生している場合、ユーザーに確認して old ブランチ側の内容（ours）を採用する。
+    """
+    try:
+        result = subprocess.run(["git", "diff", "--name-only", "--diff-filter=U"],
+                                capture_output=True, text=True, check=True)
+        conflicted_files = result.stdout.splitlines()
+    except Exception as e:
+        print(f"merge コンフリクトの確認に失敗しました: {e}")
+        return
+
+    if conflicted_files:
+        print("以下のファイルでマージコンフリクトが発生しています:")
+        for f in conflicted_files:
+            print(f"  {f}")
+        answer = input("oldブランチのこみっとOKです。テストも成功しました。mainに、現在のブランチ（old側）を正として通しますか? (y/n): ")
+        if answer.lower() == 'y':
+            for f in conflicted_files:
+                try:
+                    subprocess.run(["git", "checkout", "--ours", f], check=True)
+                    print(f"{f} のコンフリクトを 'ours' で解決しました。")
+                except Exception as e:
+                    print(f"{f} のコンフリクト解決に失敗しました: {e}")
+            try:
+                subprocess.run(["git", "add"] + conflicted_files, check=True)
+                subprocess.run(["git", "commit", "-m", "自動マージ解決: oldブランチの内容を採用"], check=True)
+                print("マージコンフリクトを解決し、コミットしました。")
+            except Exception as e:
+                print(f"マージコンフリクトのコミットに失敗しました: {e}")
+        else:
+            print("マージ解決がキャンセルされました。手動で解決してください。")
+            sys.exit(1)
+    else:
+        print("マージコンフリクトはありません。")
+
+
 def auto_commit_and_push():
     """
     変更を自動でコミットし、リモートにプッシュする処理です。
@@ -356,7 +378,7 @@ def auto_commit_and_push():
         print("自動コミットとプッシュが完了しました。")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"通常の自動コミットまたはプッシュに失敗しました: {e}")
+        print(f"通常の自動コミットまたはプッシュに失敗しました: returncode={e.returncode}\ncmd={e.cmd}\nstdout={e.output}")
         try:
             subprocess.run(["git", "push", "-f"], check=True)
             print("強制プッシュで自動コミットとプッシュが完了しました。")
@@ -406,7 +428,7 @@ def show_git_status():
 if __name__ == "__main__":
     print("===== main.py 開始 =====")
     
-    # 1. 全環境クリーンアップ
+    # 1. 全環境クリーンアップ（※これにより一部の未追跡ファイルは削除されますが、tracked ファイルの変更はそのままです）
     full_cleanup()
     
     # 2. テストファイルの import 文自動修正
@@ -447,11 +469,24 @@ if __name__ == "__main__":
         print("===== main.py 終了 (ロールバック実行) =====")
         sys.exit(1)
     
-    # 8. 自動コミット＆プッシュ（全ての変更を含む）
+    # 8. まずローカルの変更を自動コミット＆プッシュして確定する
     if not auto_commit_and_push():
         print("自動コミット/プッシュに失敗しました。")
+        sys.exit(1)
     
-    # 9. git status の結果を表示
+    # 9. その後、リモートの main ブランチとのマージを実施（ここで merge コンフリクトが発生していたら解決する）
+    try:
+        subprocess.run(["git", "pull", "origin", "main"], check=True)
+        print("リモートの main ブランチをマージしました。")
+    except subprocess.CalledProcessError as e:
+        print(f"git pull でマージコンフリクトが発生しました: {e}")
+        resolve_merge_conflicts()
+        # マージ解決後、再度コミット＆プッシュ
+        if not auto_commit_and_push():
+            print("自動コミット/プッシュに失敗しました。")
+            sys.exit(1)
+    
+    # 10. git status の結果を表示
     show_git_status()
     
     print("===== main.py 終了 =====")
