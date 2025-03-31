@@ -4,7 +4,6 @@ import shutil
 import json
 import subprocess
 import logging
-import threading
 
 # ログ設定: ファイル (main.log) とコンソールに INFO レベル以上のログを出力
 logger = logging.getLogger()
@@ -17,22 +16,22 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-
 def full_cleanup():
     """
     ローカル環境を完全にクリーンアップする関数です。
-    ※ tracked な変更は保持し、未追跡ファイル・ディレクトリのみ削除します。
+    ※ tracked な変更は保持します（git reset --hard は実行しません）。
+    未追跡ファイル・ディレクトリは削除します。
     """
-    # ログファイルのロック解除
-    logging.shutdown()
+    logging.shutdown()  # ログファイルのロック解除
     print("【全環境クリーンアップ開始】")
+    
     try:
         subprocess.run(["git", "clean", "-xdf"], check=True)
         print("未追跡ファイル・ディレクトリを削除しました。")
     except Exception as e:
         print(f"git clean に失敗しました: {e}")
-
-    # バックアップフォルダ・ファイルの削除
+    
+    # バックアップフォルダとバックアップファイルの削除
     for backup_dir in ["modules.bak"]:
         if os.path.exists(backup_dir):
             try:
@@ -47,7 +46,7 @@ def full_cleanup():
                 print(f"{backup_file} を削除しました。")
             except Exception as e:
                 print(f"{backup_file} の削除に失敗しました: {e}")
-
+    
     # __pycache__ の削除
     for root, dirs, files in os.walk(".", topdown=False):
         for d in dirs:
@@ -58,7 +57,7 @@ def full_cleanup():
                     print(f"{path} を削除しました。")
                 except Exception as e:
                     print(f"{path} の削除に失敗しました: {e}")
-
+    
     # desktop.ini の削除
     removed_files = []
     for root, dirs, files in os.walk(".", topdown=False):
@@ -71,8 +70,8 @@ def full_cleanup():
                     print(f"削除: {file_path}")
                 except Exception as e:
                     print(f"{file_path} の削除に失敗しました: {e}")
-
-    # Gitインデックスからトラッキング中の desktop.ini を除外
+    
+    # Gitインデックスから、トラッキング中の desktop.ini を除外
     if removed_files:
         tracked_files = []
         for file in removed_files:
@@ -86,8 +85,8 @@ def full_cleanup():
                 print("Gitインデックスから desktop.ini ファイルを除外しました。")
             except Exception as e:
                 print(f"Gitインデックスからの desktop.ini 除外に失敗: {e}")
-
-    # .gitignore の更新（desktop.ini は既に追加済みの場合はスキップ）
+    
+    # .gitignore の更新（desktop.ini は既に追加済み）
     gitignore_path = ".gitignore"
     try:
         if os.path.exists(gitignore_path):
@@ -101,13 +100,13 @@ def full_cleanup():
             print("'.gitignore' に 'desktop.ini' を追加しました。")
     except Exception as e:
         print(f".gitignore の更新に失敗しました: {e}")
-
+    
     print("【全環境クリーンアップ終了】")
 
 
 def update_gitignore_python_entries():
     """
-    Python の一時ファイル・ディレクトリを .gitignore に追加する。
+    Pythonの一時ファイルやディレクトリを自動で .gitignore に追加する。
     例: __pycache__/, *.pyc, *.pyo
     """
     entries_to_add = ["__pycache__/", "*.pyc", "*.pyo"]
@@ -116,7 +115,12 @@ def update_gitignore_python_entries():
     if os.path.exists(gitignore_path):
         with open(gitignore_path, "r", encoding="utf-8") as f:
             current_lines = [line.strip() for line in f.readlines()]
-    new_entries = [entry for entry in entries_to_add if entry not in current_lines]
+    else:
+        current_lines = []
+    new_entries = []
+    for entry in entries_to_add:
+        if entry not in current_lines:
+            new_entries.append(entry)
     if new_entries:
         with open(gitignore_path, "a", encoding="utf-8") as f:
             f.write("\n" + "\n".join(new_entries) + "\n")
@@ -146,8 +150,8 @@ def fix_test_imports():
 
 def move_test_files():
     """
-    ファイル名に 'test' が含まれる .py ファイルは、直下、modules、modules.bak から
-    問答無用で test/ フォルダへ移動する。
+    ファイル名に 'test' が含まれる .py ファイルは、
+    直下、modules、modules.bak から問答無用で test/ フォルダへ移動する。
     """
     test_dir = "test"
     if not os.path.exists(test_dir):
@@ -342,41 +346,6 @@ def run_tests():
         return False
 
 
-def run_module_main_tests():
-    """
-    modules フォルダ内の各 .py ファイルで、"if __name__=='__main__'" が含まれるものを
-    並列に実行してテストする。
-    """
-    def run_file(filepath):
-        try:
-            result = subprocess.run([sys.executable, filepath], capture_output=True, text=True)
-            print(f"== {filepath} の実行結果 ==")
-            print(result.stdout)
-            if result.returncode != 0:
-                print(f"{filepath} の実行でエラーが発生しました: {result.stderr}")
-        except Exception as e:
-            print(f"{filepath} の実行中に例外が発生しました: {e}")
-
-    threads = []
-    if os.path.exists("modules"):
-        for filename in os.listdir("modules"):
-            if filename.endswith(".py") and filename != "__init__.py":
-                path = os.path.join("modules", filename)
-                try:
-                    with open(path, "r", encoding="utf-8") as f:
-                        content = f.read()
-                    if "if __name__" in content:
-                        t = threading.Thread(target=run_file, args=(path,))
-                        t.start()
-                        threads.append(t)
-                except Exception as e:
-                    print(f"{path} のチェックに失敗しました: {e}")
-    # 並列実行の終了待ち
-    for t in threads:
-        t.join()
-    print("modules 内の __main__ 実行テストが完了しました。")
-
-
 def resolve_merge_conflicts():
     """
     Git merge コンフリクトが発生している場合、ユーザーに確認して old ブランチ側（ours）の内容を採用する。
@@ -457,9 +426,9 @@ def merge_into_main():
         print("現在のブランチ名の取得に失敗しました:", e)
         return False
     if current_branch == "main":
-        print("現在のブランチは main です。マージ操作は不要です。")
+        print("現在のブランチは main です。マージは不要です。")
         return True
-    answer = input(f"oldブランチのこみっとOKです。テストも成功しました。mainに、現在のブランチ（{current_branch}）の内容でマージしますか? (y/n): ")
+    answer = input(f"oldブランチのこみっとOKです。テストも成功しました。mainに、現在のブランチ（{current_branch}）を正として通しますか? (y/n): ")
     if answer.lower() != 'y':
         print("マージがキャンセルされました。")
         return False
@@ -472,7 +441,6 @@ def merge_into_main():
         print("main へのマージに失敗しました:", e)
         return False
     try:
-        # 現在のブランチが main でないので削除可能
         subprocess.run(["git", "branch", "-d", current_branch], check=True)
         subprocess.run(["git", "push", "origin", "--delete", current_branch], check=True)
         print(f"ブランチ {current_branch} を削除しました。")
@@ -517,7 +485,6 @@ def show_git_status():
     except Exception as e:
         print(f"git status の表示に失敗しました: {e}")
 
-
 def get_current_branch():
     try:
         result = subprocess.run(
@@ -529,64 +496,26 @@ def get_current_branch():
         print(f"現在のブランチの取得に失敗しました: {e}")
         return None
 
-
-def run_module_main_tests():
-    """
-    modules フォルダ内の各 .py ファイルで、"if __name__=='__main__'" が含まれるものを
-    並列に実行してテストする。
-    """
-    def run_file(filepath):
-        try:
-            result = subprocess.run([sys.executable, filepath], capture_output=True, text=True)
-            print(f"== {filepath} の実行結果 ==")
-            print(result.stdout)
-            if result.returncode != 0:
-                print(f"{filepath} の実行でエラーが発生しました: {result.stderr}")
-        except Exception as e:
-            print(f"{filepath} の実行中に例外が発生しました: {e}")
-
-    threads = []
-    if os.path.exists("modules"):
-        for filename in os.listdir("modules"):
-            if filename.endswith(".py") and filename != "__init__.py":
-                path = os.path.join("modules", filename)
-                try:
-                    with open(path, "r", encoding="utf-8") as f:
-                        content = f.read()
-                    if "if __name__" in content:
-                        t = threading.Thread(target=run_file, args=(path,))
-                        t.start()
-                        threads.append(t)
-                except Exception as e:
-                    print(f"{path} のチェックに失敗しました: {e}")
-    for t in threads:
-        t.join()
-    print("modules 内の __main__ 実行テストが完了しました。")
-
-
 if __name__ == "__main__":
     print("===== main.py 開始 =====")
     
-    # 1. 全環境クリーンアップ（tracked な変更は保持）
+    # 1. 全環境クリーンアップ（作業ディレクトリの変更はそのまま）
     full_cleanup()
     
-    # 2. Python 一時ファイル・ディレクトリを .gitignore に追加
-    update_gitignore_python_entries()
-    
-    # 3. テストファイルの import 文自動修正
+    # 2. テストファイルの import 文自動修正
     fix_test_imports()
     
-    # 4. 'test' が名前に含まれる .py ファイルを test/ フォルダへ移動（直下、modules、modules.bak）
+    # 3. 'test' が名前に含まれる .py ファイルを test/ フォルダへ移動
     move_test_files()
     
-    # 5. main.py、config.json、update_gist.py 以外の .py ファイルを modules/ に移動（test 系は除く）
+    # 4. main.py、config.json、update_gist.py 以外の .py ファイルを modules/ に移動
     if not move_py_files():
         print("ファイル移動中にエラーが発生しました。ロールバックを実行します。")
         restore_modules_and_config()
         print("===== main.py 終了 (ロールバック実行) =====")
         sys.exit(1)
     
-    # 6. config.json のバックアップ作成
+    # 5. config.json のバックアップ作成
     if os.path.exists("config.json"):
         try:
             shutil.copy2("config.json", "config.json.bak")
@@ -599,27 +528,24 @@ if __name__ == "__main__":
     else:
         print("config.json が存在しないため、バックアップは不要です。")
     
-    # 7. config.json の自動更新（テスト実行前の最後のステップ）
+    # 6. config.json の自動更新（テスト実行前の最後のステップ）
     if not update_config():
         print("config.json の更新に失敗しました。")
         sys.exit(1)
     
-    # 8. test/ フォルダ内からユニットテストを実行
+    # 7. test/ フォルダ内からユニットテストを実行
     if not run_tests():
         print("ユニットテストに失敗したため、変更を元に戻します。")
         restore_modules_and_config()
         print("===== main.py 終了 (ロールバック実行) =====")
         sys.exit(1)
     
-    # 9. modules 内の if __name__=="__main__" の実行テスト（並列実行）
-    run_module_main_tests()
-    
-    # 10. 自動コミット＆プッシュ（まずローカルの変更を確定）
+    # 8. 自動コミット＆プッシュ（まずローカルの変更を確定）
     if not auto_commit_and_push():
         print("自動コミット/プッシュに失敗しました。")
         sys.exit(1)
     
-    # 11. 現在のブランチが main でない場合、リモートの main ブランチとのマージを試みる
+    # 9. 現在のブランチが main でない場合、リモートの main ブランチとマージを試みる
     current_branch = get_current_branch()
     if current_branch != "main":
         try:
@@ -628,18 +554,14 @@ if __name__ == "__main__":
         except subprocess.CalledProcessError as e:
             print(f"git pull でマージコンフリクトが発生しました: {e}")
             resolve_merge_conflicts()
+            # マージ解決後、再度自動コミット＆プッシュ
             if not auto_commit_and_push():
                 print("自動コミット/プッシュに失敗しました。")
                 sys.exit(1)
     else:
         print("現在のブランチは main です。マージ操作は不要です。")
     
-    # 12. マージ後、積みブランチを削除する（現在のブランチが main でなければ）
-    if current_branch != "main":
-        if not merge_into_main():
-            print("main へのマージ処理に失敗しました。")
-    
-    # 13. git status の結果を表示
+    # 10. git status の結果を表示
     show_git_status()
     
     print("===== main.py 終了 =====")
