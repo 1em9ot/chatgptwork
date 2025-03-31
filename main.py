@@ -103,7 +103,6 @@ def full_cleanup():
     
     print("【全環境クリーンアップ終了】")
 
-
 def update_gitignore_python_entries():
     """
     Pythonの一時ファイルやディレクトリを自動で .gitignore に追加する。
@@ -128,7 +127,6 @@ def update_gitignore_python_entries():
     else:
         print("'.gitignore' は既に Python 一時ファイルのエントリを含んでいます。")
 
-
 def fix_test_imports():
     """
     modules/test_ast_transformer.py 内の import 文を自動修正する。
@@ -146,7 +144,6 @@ def fix_test_imports():
                 print("test_ast_transformer.py のインポート文を修正しました。")
         except Exception as e:
             print(f"test_ast_transformer.py の修正に失敗しました: {e}")
-
 
 def move_test_files():
     """
@@ -190,7 +187,6 @@ def move_test_files():
                 except Exception as e:
                     print(f"{filename} の移動中にエラーが発生しました: {e}")
 
-
 def ensure_init_file():
     """
     modules/ をパッケージとして扱うため、__init__.py の存在を保証する。
@@ -203,7 +199,6 @@ def ensure_init_file():
             print("modules/__init__.py を作成しました。")
         except Exception as e:
             print(f"modules/__init__.py の作成に失敗しました: {e}")
-
 
 def ensure_folder_consistency():
     """
@@ -250,7 +245,6 @@ def ensure_folder_consistency():
         ensure_init_file()
     return True
 
-
 def move_py_files():
     """
     main.py、config.json、update_gist.py 以外の .py ファイル（"test" を含まないもの）を modules/ に移動する。
@@ -275,7 +269,6 @@ def move_py_files():
                 print(f"{filename} の移動中にエラーが発生しました: {e}")
                 return False
     return True
-
 
 def update_config():
     """
@@ -326,7 +319,6 @@ def update_config():
         print("config.json が存在しません。")
         return False
 
-
 def run_tests():
     """
     test/ フォルダ内から unittest を探索して実行する。
@@ -345,7 +337,6 @@ def run_tests():
         print(f"ユニットテスト実行中に例外が発生しました: {e}")
         return False
 
-
 def resolve_merge_conflicts():
     """
     Git merge コンフリクトが発生している場合、ユーザーに確認して old ブランチ側（ours）の内容を採用する。
@@ -362,7 +353,7 @@ def resolve_merge_conflicts():
         print("以下のファイルでマージコンフリクトが発生しています:")
         for f in conflicted_files:
             print(f"  {f}")
-        answer = input("oldブランチのこみっとOKです。テストも成功しました。mainに、現在のブランチ（old側）の内容でマージしますか? (y/n): ")
+        answer = input("oldブランチのこみっとOKです。テストも成功しました。対象ブランチの内容でマージしますか? (y/n): ")
         if answer.lower() == 'y':
             for f in conflicted_files:
                 try:
@@ -382,11 +373,11 @@ def resolve_merge_conflicts():
     else:
         print("マージコンフリクトはありません。")
 
-
 def auto_commit_and_push():
     """
     変更を自動でコミットし、リモートにプッシュする処理です。
-    .git/index.lock が存在する場合は自動で削除し、通常の push で失敗したら強制プッシュも試みる。
+    もしコミット対象がなければそのまま成功とみなします（エラー出力はしません）。
+    強制プッシュは試みません。
     """
     index_lock = os.path.join(".git", "index.lock")
     if os.path.exists(index_lock):
@@ -398,47 +389,48 @@ def auto_commit_and_push():
             return False
     try:
         subprocess.run(["git", "add", "-A"], check=True)
-        subprocess.run(["git", "commit", "-m", "自動コミット by main.py"], check=True)
+        # コミット実行。何も変更がなければ "nothing to commit" と出力されるので、それは成功扱いとする
+        result_commit = subprocess.run(["git", "commit", "-m", "自動コミット by main.py"], check=False, capture_output=True, text=True)
+        if ("nothing to commit" in result_commit.stdout.lower() or 
+            "nothing to commit" in result_commit.stderr.lower()):
+            print("変更はありません。自動コミットはスキップします。")
+        else:
+            print("自動コミット完了。")
         subprocess.run(["git", "push"], check=True)
         print("自動コミットとプッシュが完了しました。")
         return True
     except subprocess.CalledProcessError as e:
         print(f"通常の自動コミットまたはプッシュに失敗しました: returncode={e.returncode}\ncmd={e.cmd}\nstdout={e.output}")
-        try:
-            subprocess.run(["git", "push", "-f"], check=True)
-            print("強制プッシュで自動コミットとプッシュが完了しました。")
-            return True
-        except subprocess.CalledProcessError as e2:
-            print(f"強制プッシュにも失敗しました: {e2}")
-            return False
+        return False
 
-
-def merge_into_main():
+def merge_into_target():
     """
-    現在のブランチ（old側）の内容で、リモートの main ブランチにマージし、
+    現在のブランチ（old側）の内容で、リモートのターゲットブランチにマージし、
     マージ後に現在のブランチを削除する。
-    ※現在のブランチが main の場合は何もしません。
+    現在のブランチがターゲットブランチの場合は何もしません。
+    ターゲットブランチは環境変数 TARGET_BRANCH から取得し、設定がなければ "main" を使用します。
     """
+    target_branch = os.environ.get("TARGET_BRANCH", "main")
     try:
         current_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"],
                                                    text=True).strip()
     except Exception as e:
         print("現在のブランチ名の取得に失敗しました:", e)
         return False
-    if current_branch == "main":
-        print("現在のブランチは main です。マージは不要です。")
+    if current_branch == target_branch:
+        print(f"現在のブランチは {target_branch} です。マージは不要です。")
         return True
-    answer = input(f"oldブランチのこみっとOKです。テストも成功しました。mainに、現在のブランチ（{current_branch}）を正として通しますか? (y/n): ")
+    answer = input(f"oldブランチのこみっとOKです。テストも成功しました。{target_branch} に、現在のブランチ（{current_branch}）を正としてマージしますか? (y/n): ")
     if answer.lower() != 'y':
         print("マージがキャンセルされました。")
         return False
     try:
-        subprocess.run(["git", "checkout", "main"], check=True)
+        subprocess.run(["git", "checkout", target_branch], check=True)
         subprocess.run(["git", "merge", current_branch], check=True)
         subprocess.run(["git", "push"], check=True)
-        print("main にマージし、プッシュしました。")
+        print(f"{target_branch} にマージし、プッシュしました。")
     except Exception as e:
-        print("main へのマージに失敗しました:", e)
+        print(f"{target_branch} へのマージに失敗しました:", e)
         return False
     try:
         subprocess.run(["git", "branch", "-d", current_branch], check=True)
@@ -447,7 +439,6 @@ def merge_into_main():
     except Exception as e:
         print(f"ブランチ {current_branch} の削除に失敗しました: {e}")
     return True
-
 
 def restore_modules_and_config():
     """
@@ -475,7 +466,6 @@ def restore_modules_and_config():
         else:
             print("config.json が元々存在しないため、復元は不要です。")
 
-
 def show_git_status():
     """現在の Git の状態を表示する"""
     try:
@@ -502,20 +492,23 @@ if __name__ == "__main__":
     # 1. 全環境クリーンアップ（作業ディレクトリの変更はそのまま）
     full_cleanup()
     
-    # 2. テストファイルの import 文自動修正
+    # 2. Python 一時ファイルのエントリを .gitignore に追加
+    update_gitignore_python_entries()
+    
+    # 3. テストファイルの import 文自動修正
     fix_test_imports()
     
-    # 3. 'test' が名前に含まれる .py ファイルを test/ フォルダへ移動
+    # 4. 'test' が名前に含まれる .py ファイルを test/ フォルダへ移動
     move_test_files()
     
-    # 4. main.py、config.json、update_gist.py 以外の .py ファイルを modules/ に移動
+    # 5. main.py、config.json、update_gist.py 以外の .py ファイルを modules/ に移動
     if not move_py_files():
         print("ファイル移動中にエラーが発生しました。ロールバックを実行します。")
         restore_modules_and_config()
         print("===== main.py 終了 (ロールバック実行) =====")
         sys.exit(1)
     
-    # 5. config.json のバックアップ作成
+    # 6. config.json のバックアップ作成
     if os.path.exists("config.json"):
         try:
             shutil.copy2("config.json", "config.json.bak")
@@ -528,40 +521,46 @@ if __name__ == "__main__":
     else:
         print("config.json が存在しないため、バックアップは不要です。")
     
-    # 6. config.json の自動更新（テスト実行前の最後のステップ）
+    # 7. config.json の自動更新（テスト実行前の最後のステップ）
     if not update_config():
         print("config.json の更新に失敗しました。")
         sys.exit(1)
     
-    # 7. test/ フォルダ内からユニットテストを実行
+    # 8. test/ フォルダ内からユニットテストを実行
     if not run_tests():
         print("ユニットテストに失敗したため、変更を元に戻します。")
         restore_modules_and_config()
         print("===== main.py 終了 (ロールバック実行) =====")
         sys.exit(1)
     
-    # 8. 自動コミット＆プッシュ（まずローカルの変更を確定）
+    # 9. 自動コミット＆プッシュ（まずローカルの変更を確定）
     if not auto_commit_and_push():
         print("自動コミット/プッシュに失敗しました。")
         sys.exit(1)
     
-    # 9. 現在のブランチが main でない場合、リモートの main ブランチとマージを試みる
+    # 10. 現在のブランチがターゲットブランチ（TARGET_BRANCH, デフォルトは "main"）でない場合、リモートのターゲットブランチとマージを試みる
     current_branch = get_current_branch()
-    if current_branch != "main":
+    target_branch = os.environ.get("TARGET_BRANCH", "main")
+    if current_branch != target_branch:
         try:
-            subprocess.run(["git", "pull", "origin", "main"], check=True)
-            print("リモートの main ブランチをマージしました。")
+            subprocess.run(["git", "pull", "origin", target_branch], check=True)
+            print(f"リモートの {target_branch} ブランチをマージしました。")
         except subprocess.CalledProcessError as e:
             print(f"git pull でマージコンフリクトが発生しました: {e}")
             resolve_merge_conflicts()
-            # マージ解決後、再度自動コミット＆プッシュ
             if not auto_commit_and_push():
                 print("自動コミット/プッシュに失敗しました。")
                 sys.exit(1)
     else:
-        print("現在のブランチは main です。マージ操作は不要です。")
+        print(f"現在のブランチは {target_branch} です。マージ操作は不要です。")
     
-    # 10. git status の結果を表示
+    # 11. merge_into_target() を実行（オプション：現在のブランチがターゲットブランチでない場合のみ）
+    if current_branch != target_branch:
+        if not merge_into_target():
+            print("ブランチのマージに失敗しました。")
+            sys.exit(1)
+    
+    # 12. git status の結果を表示
     show_git_status()
     
     print("===== main.py 終了 =====")
