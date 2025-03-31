@@ -485,23 +485,30 @@ def show_git_status():
     except Exception as e:
         print(f"git status の表示に失敗しました: {e}")
 
+def get_current_branch():
+    try:
+        result = subprocess.run(
+            ["git", "symbolic-ref", "--short", "HEAD"],
+            capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip()
+    except Exception as e:
+        print(f"現在のブランチの取得に失敗しました: {e}")
+        return None
 
 if __name__ == "__main__":
     print("===== main.py 開始 =====")
     
-    # 1. 全環境クリーンアップ（※tracked な変更は保持）
+    # 1. 全環境クリーンアップ（作業ディレクトリの変更はそのまま）
     full_cleanup()
-    
-    # 1.5. Python の一時ファイル等を .gitignore に追加
-    update_gitignore_python_entries()
     
     # 2. テストファイルの import 文自動修正
     fix_test_imports()
     
-    # 3. ファイル名に "test" が含まれる .py ファイルを test/ フォルダへ移動（直下、modules、modules.bak）
+    # 3. 'test' が名前に含まれる .py ファイルを test/ フォルダへ移動
     move_test_files()
     
-    # 4. main.py、config.json、update_gist.py 以外の *.py ファイルを modules/ へ移動（test 系は除く）
+    # 4. main.py、config.json、update_gist.py 以外の .py ファイルを modules/ に移動
     if not move_py_files():
         print("ファイル移動中にエラーが発生しました。ロールバックを実行します。")
         restore_modules_and_config()
@@ -525,7 +532,7 @@ if __name__ == "__main__":
     if not update_config():
         print("config.json の更新に失敗しました。")
         sys.exit(1)
-
+    
     # 7. test/ フォルダ内からユニットテストを実行
     if not run_tests():
         print("ユニットテストに失敗したため、変更を元に戻します。")
@@ -533,28 +540,28 @@ if __name__ == "__main__":
         print("===== main.py 終了 (ロールバック実行) =====")
         sys.exit(1)
     
-    # 8. まずローカルの変更を自動コミット＆プッシュして確定する
+    # 8. 自動コミット＆プッシュ（まずローカルの変更を確定）
     if not auto_commit_and_push():
         print("自動コミット/プッシュに失敗しました。")
         sys.exit(1)
     
-    # 9. リモートの main ブランチとマージする
-    try:
-        subprocess.run(["git", "pull", "origin", "main"], check=True)
-        print("リモートの main ブランチをマージしました。")
-    except subprocess.CalledProcessError as e:
-        print(f"git pull でマージコンフリクトが発生しました: {e}")
-        resolve_merge_conflicts()
-        # マージ解決後、再度コミット＆プッシュ
-        if not auto_commit_and_push():
-            print("自動コミット/プッシュに失敗しました。")
-            sys.exit(1)
+    # 9. 現在のブランチが main でない場合、リモートの main ブランチとマージを試みる
+    current_branch = get_current_branch()
+    if current_branch != "main":
+        try:
+            subprocess.run(["git", "pull", "origin", "main"], check=True)
+            print("リモートの main ブランチをマージしました。")
+        except subprocess.CalledProcessError as e:
+            print(f"git pull でマージコンフリクトが発生しました: {e}")
+            resolve_merge_conflicts()
+            # マージ解決後、再度自動コミット＆プッシュ
+            if not auto_commit_and_push():
+                print("自動コミット/プッシュに失敗しました。")
+                sys.exit(1)
+    else:
+        print("現在のブランチは main です。マージ操作は不要です。")
     
-    # 10. 現在のブランチの内容で main にマージし、マージ後ブランチを削除する
-    if not merge_into_main():
-        print("main へのマージ処理がキャンセルまたは失敗しました。")
-    
-    # 11. git status の結果を表示
+    # 10. git status の結果を表示
     show_git_status()
     
     print("===== main.py 終了 =====")
