@@ -28,11 +28,17 @@ def full_cleanup():
     logging.shutdown()  # ログファイルのロック解除
     print("【全環境クリーンアップ開始】")
     
-    try:
-        subprocess.run(["git", "reset", "--hard", "HEAD"], check=True)
-        print("Gitリポジトリを HEAD にリセットしました。")
-    except Exception as e:
-        print(f"Git reset に失敗しました: {e}")
+    # try:
+    #     """
+    #     subprocess.run(["git", "reset", "--hard", "HEAD"], check=True)
+    #     このコマンドは、作業ディレクトリのすべての変更を「HEAD」の状態にリセット（つまり破棄）します。
+    #     そのため、たとえ main.py を含むファイルに変更があっても、このコマンドが実行されると変更がすべて元に戻され、
+    #     「nothing to commit, working tree clean」と表示されるようになります。
+    #     """
+    #     subprocess.run(["git", "reset", "--hard", "HEAD"], check=True)
+    #     print("Gitリポジトリを HEAD にリセットしました。")
+    # except Exception as e:
+    #     print(f"Git reset に失敗しました: {e}")
     
     try:
         subprocess.run(["git", "clean", "-xdf"], check=True)
