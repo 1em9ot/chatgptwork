@@ -372,7 +372,6 @@ def resolve_merge_conflicts():
             sys.exit(1)
     else:
         print("マージコンフリクトはありません。")
-
 def auto_commit_and_push():
     """
     変更を自動でコミットし、リモートにプッシュする処理です。
@@ -390,9 +389,13 @@ def auto_commit_and_push():
     try:
         subprocess.run(["git", "add", "-A"], check=True)
         # コミット実行。何も変更がなければ "nothing to commit" と出力されるので、それは成功扱いとする
-        result_commit = subprocess.run(["git", "commit", "-m", "自動コミット by main.py"], check=False, capture_output=True, text=True)
-        if ("nothing to commit" in result_commit.stdout.lower() or 
-            "nothing to commit" in result_commit.stderr.lower()):
+        result_commit = subprocess.run(
+            ["git", "commit", "-m", "自動コミット by main.py"],
+            check=False, capture_output=True, text=True
+        )
+        stdout_lower = (result_commit.stdout or "").lower()
+        stderr_lower = (result_commit.stderr or "").lower()
+        if "nothing to commit" in stdout_lower or "nothing to commit" in stderr_lower:
             print("変更はありません。自動コミットはスキップします。")
         else:
             print("自動コミット完了。")
@@ -402,6 +405,7 @@ def auto_commit_and_push():
     except subprocess.CalledProcessError as e:
         print(f"通常の自動コミットまたはプッシュに失敗しました: returncode={e.returncode}\ncmd={e.cmd}\nstdout={e.output}")
         return False
+
 
 def merge_into_target():
     """
