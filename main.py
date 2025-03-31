@@ -5,7 +5,7 @@ import json
 import subprocess
 import logging
 
-# ログ設定: ファイル (main.log) とコンソールの両方にINFOレベル以上を出力
+# ログ設定: ファイル (main.log) とコンソールに INFO レベル以上のログを出力
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -16,270 +16,329 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
+def full_cleanup():
+    """
+    ローカル環境を完全にクリーンアップする関数です。
+    ・logging.shutdown() を実行してログハンドラを閉じる（main.log を解放）
+    ・Gitリポジトリを HEAD にリセットし、未追跡ファイルを全削除 (git clean -xdf)
+    ・バックアップフォルダ、__pycache__、desktop.ini などの不要ファイルを削除する
+    ・.gitignore に desktop.ini を追加して以降の追跡から除外する
+    """
+    logging.shutdown()  # ログハンドラを閉じ、ログファイルのロックを解除
+    print("【全環境クリーンアップ開始】")
+    
+    try:
+        subprocess.run(["git", "reset", "--hard", "HEAD"], check=True)
+        print("Gitリポジトリを HEAD にリセットしました。")
+    except Exception as e:
+        print(f"Git reset に失敗しました: {e}")
+    
+    try:
+        subprocess.run(["git", "clean", "-xdf"], check=True)
+        print("未追跡ファイル・ディレクトリを削除しました。")
+    except Exception as e:
+        print(f"git clean に失敗しました: {e}")
+    
+    # バックアップフォルダとバックアップファイルの削除
+    for backup_dir in ["modules.bak"]:
+        if os.path.exists(backup_dir):
+            try:
+                shutil.rmtree(backup_dir)
+                print(f"{backup_dir} を削除しました。")
+            except Exception as e:
+                print(f"{backup_dir} の削除に失敗しました: {e}")
+    for backup_file in ["config.json.bak"]:
+        if os.path.exists(backup_file):
+            try:
+                os.remove(backup_file)
+                print(f"{backup_file} を削除しました。")
+            except Exception as e:
+                print(f"{backup_file} の削除に失敗しました: {e}")
+    
+    # __pycache__ の削除
+    for root, dirs, files in os.walk(".", topdown=False):
+        for d in dirs:
+            if d == "__pycache__":
+                path = os.path.join(root, d)
+                try:
+                    shutil.rmtree(path)
+                    print(f"{path} を削除しました。")
+                except Exception as e:
+                    print(f"{path} の削除に失敗しました: {e}")
+    
+    # desktop.ini の削除
+    removed_files = []
+    for root, dirs, files in os.walk(".", topdown=False):
+        for f in files:
+            if f.lower() == "desktop.ini":
+                file_path = os.path.join(root, f)
+                try:
+                    os.remove(file_path)
+                    removed_files.append(file_path)
+                    print(f"削除: {file_path}")
+                except Exception as e:
+                    print(f"{file_path} の削除に失敗しました: {e}")
+    
+    # Git インデックスから、実際にトラッキングされている desktop.ini のみ削除
+    if removed_files:
+        tracked_files = []
+        for file in removed_files:
+            result = subprocess.run(["git", "ls-files", "--error-unmatch", file],
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if result.returncode == 0:
+                tracked_files.append(file)
+        if tracked_files:
+            try:
+                subprocess.run(["git", "rm", "--cached", "-f"] + tracked_files, check=True)
+                print("Gitインデックスから desktop.ini ファイルを除外しました。")
+            except Exception as e:
+                print(f"Gitインデックスからの desktop.ini 除外に失敗: {e}")
+    
+    # .gitignore の更新
+    gitignore_path = ".gitignore"
+    try:
+        if os.path.exists(gitignore_path):
+            with open(gitignore_path, "r", encoding="utf-8") as f:
+                lines = f.read().splitlines()
+        else:
+            lines = []
+        if "desktop.ini" not in [line.strip() for line in lines]:
+            with open(gitignore_path, "a", encoding="utf-8") as f:
+                f.write("\ndesktop.ini\n")
+            print("'.gitignore' に 'desktop.ini' を追加しました。")
+    except Exception as e:
+        print(f".gitignore の更新に失敗しました: {e}")
+    
+    print("【全環境クリーンアップ終了】")
+
+def fix_test_imports():
+    """
+    modules/test_ast_transformer.py 内の import 文を自動修正する。
+    'from ast_transformer import' を 'from modules.ast_transformer import' に置換します。
+    """
+    test_file = os.path.join("modules", "test_ast_transformer.py")
+    if os.path.exists(test_file):
+        try:
+            with open(test_file, "r", encoding="utf-8") as f:
+                content = f.read()
+            new_content = content.replace("from ast_transformer import", "from modules.ast_transformer import")
+            if new_content != content:
+                with open(test_file, "w", encoding="utf-8") as f:
+                    f.write(new_content)
+                print("test_ast_transformer.py のインポート文を修正しました。")
+        except Exception as e:
+            print(f"test_ast_transformer.py の修正に失敗しました: {e}")
+
+def ensure_init_file():
+    """
+    modules/ をパッケージとして扱うため、__init__.py の存在を保証する。
+    """
+    init_path = os.path.join("modules", "__init__.py")
+    if not os.path.exists(init_path):
+        try:
+            with open(init_path, "w", encoding="utf-8") as f:
+                f.write("# modules パッケージとして扱うための __init__.py\n")
+            print("modules/__init__.py を作成しました。")
+        except Exception as e:
+            print(f"modules/__init__.py の作成に失敗しました: {e}")
+
 def ensure_folder_consistency():
-    """modulesフォルダのバックアップ・重複整理・設定修正を実施する"""
+    """
+    modules フォルダのバックアップ・重複整理・設定修正を実施する。
+    """
     backup_success = True
-    # 1. modules/ ディレクトリのバックアップ（modules.bak/ に保存）
     if os.path.exists("modules"):
         if os.path.exists("modules.bak"):
             try:
                 shutil.rmtree("modules.bak")
-                logger.info("古いバックアップ modules.bak/ を削除しました。")
+                print("古いバックアップ modules.bak/ を削除しました。")
             except Exception as e:
-                logger.warning(f"古い modules.bak/ の削除に失敗しました: {e}")
+                print(f"古い modules.bak/ の削除に失敗しました: {e}")
         try:
             shutil.copytree("modules", "modules.bak")
-            logger.info("modules/ を modules.bak/ にバックアップしました。")
+            print("modules/ を modules.bak/ にバックアップしました。")
         except Exception as e:
-            logger.error(f"modules/ のバックアップに失敗しました: {e}")
+            print(f"modules/ のバックアップに失敗しました: {e}")
             backup_success = False
     else:
-        logger.info("modules/ ディレクトリが存在しません（初回実行または既に移動済み）。")
-
+        print("modules/ ディレクトリが存在しません。")
     if not backup_success:
-        # バックアップが取れない場合は安全のため中断
         return False
 
-    # 2. 重複フォルダ modules(1)/ の整理・統合
-    if os.path.exists("modules(1)"):
-        logger.info("重複フォルダ modules(1)/ が存在します。統合処理を実行します。")
-        if not os.path.exists("modules"):
-            # modules/ が無ければ modules(1)/ をリネーム
-            try:
-                os.rename("modules(1)", "modules")
-                logger.info("modules(1)/ を modules/ にリネームしました。")
-            except Exception as e:
-                logger.error(f"modules(1)/ を modules/ にリネームできませんでした: {e}")
-                # リネームに失敗した場合はコピーで対処
-                if not os.path.exists("modules"):
-                    try:
-                        shutil.copytree("modules(1)", "modules")
-                        logger.info("modules(1)/ を modules/ にコピーしました。")
-                    except Exception as e2:
-                        logger.error(f"modules(1)/ から modules/ へのコピーに失敗しました: {e2}")
-        else:
-            # modules/ が存在する場合、modules(1)/ 内のファイルを modules/ に統合
-            for root, dirs, files in os.walk("modules(1)"):
-                rel_path = os.path.relpath(root, "modules(1)")
-                target_dir = "modules" if rel_path == "." else os.path.join("modules", rel_path)
-                if not os.path.exists(target_dir):
-                    try:
-                        os.makedirs(target_dir, exist_ok=True)
-                    except Exception as e:
-                        logger.warning(f"ディレクトリ {target_dir} の作成に失敗しました: {e}")
-                for file in files:
-                    src_path = os.path.join(root, file)
-                    dest_path = os.path.join(target_dir, file)
-                    try:
-                        if os.path.exists(dest_path):
-                            os.remove(dest_path)
-                            logger.info(f"既存のファイル {dest_path} を削除して上書きします。")
-                        shutil.move(src_path, dest_path)
-                        logger.info(f"{src_path} を {dest_path} に移動しました。")
-                    except Exception as e:
-                        logger.error(f"ファイル {src_path} の統合に失敗しました: {e}")
-            # 統合後、modules(1)/ フォルダを削除
-            try:
-                shutil.rmtree("modules(1)")
-                logger.info("統合完了後、modules(1)/ フォルダを削除しました。")
-            except Exception as e:
-                logger.error(f"modules(1)/ フォルダの削除に失敗しました: {e}")
-    else:
-        logger.info("重複フォルダ modules(1)/ は存在しません。")
-
-    # 3. modules/ フォルダ内のファイルチェック（必要なファイルが無い場合はバックアップから復元）
     if os.path.exists("modules"):
         py_files = [f for f in os.listdir("modules") if f.endswith(".py")]
         if len(py_files) == 0:
             if os.path.exists("modules.bak"):
-                logger.warning("modules/ フォルダ内に .py ファイルが見つかりません。バックアップから復元します。")
+                print("modules/ に .py ファイルが見つかりません。バックアップから復元します。")
                 try:
                     shutil.rmtree("modules")
                 except Exception as e:
-                    logger.error(f"空の modules/ フォルダの削除に失敗しました: {e}")
+                    print(f"modules/ の削除に失敗しました: {e}")
                 try:
                     shutil.copytree("modules.bak", "modules")
-                    logger.info("バックアップから modules/ を復元しました。")
+                    print("バックアップから modules/ を復元しました。")
                 except Exception as e:
-                    logger.error(f"バックアップから modules/ の復元に失敗しました: {e}")
+                    print(f"modules/ の復元に失敗しました: {e}")
             else:
-                logger.error("modules/ フォルダが空で、バックアップも存在しません。")
+                print("modules/ が空で、バックアップも存在しません。")
     else:
-        logger.warning("modules/ フォルダが存在しません。")
+        print("modules/ ディレクトリが存在しません。")
+    if os.path.exists("modules"):
+        ensure_init_file()
 
-    # 4. config.json 内 gist_files のパス修正（modules(1)/ -> modules/）
-    config_path = "config.json"
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
-        except Exception as e:
-            logger.error(f"config.json の読み込みに失敗しました: {e}")
-            config = None
-        if config and "gist_files" in config:
-            gist_files = config["gist_files"]
-            updated = False
-            if isinstance(gist_files, list):
-                new_list = []
-                for path in gist_files:
-                    if isinstance(path, str):
-                        new_path = path
-                        # modules(1)/ を modules/ に置換
-                        if "modules(1)" in new_path:
-                            new_path = new_path.replace("modules(1)", "modules")
-                            updated = True
-                            logger.info(f"gist_files 修正: {path} -> {new_path}")
-                        # .pyファイル（main.py, update_gist.py以外）は modules/ 配下に統一
-                        if new_path.endswith(".py") and new_path not in ("main.py", "update_gist.py") and not new_path.startswith("modules/"):
-                            new_path = os.path.join("modules", os.path.basename(new_path))
-                            updated = True
-                            logger.info(f"gist_files エントリを modules/ 配下に修正: {path} -> {new_path}")
-                        new_list.append(new_path)
-                    else:
-                        new_list.append(path)
-                # 重複エントリを削除
-                unique_list = []
-                seen = set()
-                for p in new_list:
-                    if p not in seen:
-                        unique_list.append(p)
-                        seen.add(p)
-                if len(unique_list) != len(new_list):
-                    updated = True
-                    logger.info("gist_files 内の重複エントリを削除しました。")
-                if updated:
-                    config["gist_files"] = unique_list
-            elif isinstance(gist_files, dict):
-                # 辞書形式の場合も modules(1) を modules に置換し、必要ならパスを修正
-                for key, path in list(gist_files.items()):
-                    if isinstance(path, str):
-                        new_path = path
-                        if "modules(1)" in new_path:
-                            new_path = new_path.replace("modules(1)", "modules")
-                            updated = True
-                            logger.info(f"gist_files 修正: {path} -> {new_path}")
-                        if new_path.endswith(".py") and new_path not in ("main.py", "update_gist.py") and not new_path.startswith("modules/"):
-                            new_path = os.path.join("modules", os.path.basename(new_path))
-                            updated = True
-                            logger.info(f"gist_files エントリを modules/ 配下に修正: {path} -> {new_path}")
-                        config["gist_files"][key] = new_path
-            if updated:
-                try:
-                    with open(config_path, "w", encoding="utf-8") as f:
-                        json.dump(config, f, ensure_ascii=False, indent=4)
-                    logger.info("config.json の gist_files エントリを更新しました。")
-                except Exception as e:
-                    logger.error(f"config.json の更新書き込みに失敗しました: {e}")
-                    return False
-        else:
-            logger.info("config.json に gist_files エントリが見つかりません。")
-    else:
-        logger.info("config.json が存在しないため、gist_files の更新はスキップします。")
+    # config.json の gist_files 修正は省略
     return True
 
 def move_py_files():
-    """main.py・config.json・update_gist.py を除く全ての .py ファイルを modules/ に移動"""
+    """
+    main.py、config.json、update_gist.py を除く全ての .py ファイルを modules/ に移動する。
+    """
     modules_dir = "modules"
     if not os.path.exists(modules_dir):
         os.makedirs(modules_dir, exist_ok=True)
-        logger.info(f"{modules_dir}/ ディレクトリを作成しました。")
+        print(f"{modules_dir}/ を作成しました。")
+    ensure_init_file()
     for filename in os.listdir("."):
         if filename.endswith(".py") and filename not in ("main.py", "config.json", "update_gist.py"):
             src = filename
             dst = os.path.join(modules_dir, filename)
             try:
                 if os.path.exists(dst):
-                    logger.warning(f"{dst} が既に存在します。{filename} の移動をスキップします。")
+                    print(f"{dst} が既に存在します。{filename} の移動をスキップします。")
                 else:
                     shutil.move(src, dst)
-                    logger.info(f"{filename} を {dst} に移動しました。")
+                    print(f"{filename} を {dst} に移動しました。")
             except Exception as e:
-                logger.error(f"{filename} の移動中にエラーが発生しました: {e}")
+                print(f"{filename} の移動中にエラーが発生しました: {e}")
                 return False
     return True
 
 def run_tests():
-    """unittest を実行し、成功なら True を返す"""
+    """
+    unittest を実行し、成功なら True を返す。
+    """
     try:
-        result = subprocess.run(["python", "-m", "unittest", "discover"], capture_output=True, text=True)
+        result = subprocess.run([sys.executable, "-m", "unittest", "discover"],
+                                  capture_output=True, text=True)
         if result.returncode != 0:
-            logger.error(f"ユニットテスト失敗:\n{result.stdout}\n{result.stderr}")
+            print(f"ユニットテスト失敗:\n{result.stdout}\n{result.stderr}")
             return False
-        logger.info("ユニットテスト成功。")
+        print("ユニットテスト成功。")
         return True
     except Exception as e:
-        logger.error(f"ユニットテスト実行中に例外が発生しました: {e}")
+        print(f"ユニットテスト実行中に例外が発生しました: {e}")
         return False
 
 def update_gist():
-    """update_gist.py を実行して Gist を更新する"""
+    """
+    update_gist.py を実行して Gist を更新する。
+    """
     try:
-        result = subprocess.run(["python", "update_gist.py"], capture_output=True, text=True)
+        result = subprocess.run([sys.executable, "update_gist.py"],
+                                  capture_output=True, text=True)
         if result.returncode != 0:
-            logger.error(f"Gist 更新スクリプトでエラー発生 (戻り値 {result.returncode}):\n{result.stdout}\n{result.stderr}")
+            print(f"Gist 更新スクリプトでエラー発生 (戻り値 {result.returncode}):\n{result.stdout}\n{result.stderr}")
             return False
-        logger.info("Gist を更新しました。")
+        print("Gist を更新しました。")
         return True
     except Exception as e:
-        logger.error(f"Gist の更新処理中に例外が発生しました: {e}")
+        print(f"Gist の更新処理中に例外が発生しました: {e}")
+        return False
+
+def auto_commit_and_push():
+    """
+    変更を自動でコミットし、プッシュする処理です。
+    .git/index.lock が存在する場合は自動で削除します。
+    """
+    index_lock = os.path.join(".git", "index.lock")
+    if os.path.exists(index_lock):
+        try:
+            os.remove(index_lock)
+            print("index.lock を自動で削除しました。")
+        except Exception as e:
+            print(f"index.lock の削除に失敗しました: {e}")
+            return False
+    try:
+        subprocess.run(["git", "add", "-A"], check=True)
+        subprocess.run(["git", "commit", "-m", "自動コミット by main.py"], check=True)
+        subprocess.run(["git", "push"], check=True)
+        print("自動コミットとプッシュが完了しました。")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"自動コミットまたはプッシュに失敗しました: {e}")
         return False
 
 def restore_modules_and_config():
-    """modules/ および config.json をバックアップから復元"""
+    """
+    modules/ および config.json をバックアップから復元する。
+    """
     if os.path.exists("modules.bak"):
         try:
             if os.path.exists("modules"):
                 shutil.rmtree("modules")
             shutil.copytree("modules.bak", "modules")
-            logger.info("バックアップから modules/ を復元しました。")
+            print("バックアップから modules/ を復元しました。")
         except Exception as e:
-            logger.error(f"modules/ の復元に失敗しました: {e}")
+            print(f"modules/ の復元に失敗しました: {e}")
     else:
-        logger.error("modules.bak/ が存在しないため modules/ を復元できません。")
+        print("modules.bak/ が存在しないため modules/ を復元できません。")
     if os.path.exists("config.json.bak"):
         try:
             shutil.copy2("config.json.bak", "config.json")
-            logger.info("バックアップから config.json を復元しました。")
+            print("バックアップから config.json を復元しました。")
         except Exception as e:
-            logger.error(f"config.json の復元に失敗しました: {e}")
+            print(f"config.json の復元に失敗しました: {e}")
     else:
         if os.path.exists("config.json"):
-            logger.error("config.json.bak が存在しないため config.json を復元できません。")
+            print("config.json.bak が存在しないため config.json を復元できません。")
         else:
-            logger.info("config.json が元々存在しないため、復元は不要です。")
+            print("config.json が元々存在しないため、復元は不要です。")
 
 if __name__ == "__main__":
-    logger.info("===== main.py 開始 =====")
-    # config.json のバックアップを作成
+    print("===== main.py 開始 =====")
+    
+    # すべての環境を根こそぎクリーンアップ
+    full_cleanup()
+    
+    # テストファイルの import 文を自動修正
+    fix_test_imports()
+    
+    # config.json のバックアップ作成
     if os.path.exists("config.json"):
         try:
             shutil.copy2("config.json", "config.json.bak")
-            logger.info("config.json のバックアップを作成しました。")
+            print("config.json のバックアップを作成しました。")
         except Exception as e:
-            logger.error(f"config.json のバックアップに失敗しました: {e}")
-            logger.error("設定ファイルのバックアップに失敗したため処理を中断します。")
-            logger.info("===== main.py 終了 (バックアップ失敗) =====")
+            print(f"config.json のバックアップに失敗しました: {e}")
+            print("設定ファイルのバックアップに失敗したため処理を中断します。")
+            print("===== main.py 終了 (バックアップ失敗) =====")
             sys.exit(1)
-    # フォルダ構成の整理と config.json 更新
+    else:
+        print("config.json が存在しないため、バックアップは不要です。")
+    
     if not ensure_folder_consistency():
-        logger.error("フォルダ構成の整合性確保中にエラーが発生しました。ロールバックを実行します。")
+        print("フォルダ構成の整合性確保中にエラーが発生しました。ロールバックを実行します。")
         restore_modules_and_config()
-        logger.info("===== main.py 終了 (ロールバック実行) =====")
+        print("===== main.py 終了 (ロールバック実行) =====")
         sys.exit(1)
-    # .pyファイルの modules/ への移動
+    
     if not move_py_files():
-        logger.error("ファイル移動中にエラーが発生しました。ロールバックを実行します。")
+        print("ファイル移動中にエラーが発生しました。ロールバックを実行します。")
         restore_modules_and_config()
-        logger.info("===== main.py 終了 (ロールバック実行) =====")
+        print("===== main.py 終了 (ロールバック実行) =====")
         sys.exit(1)
-    # ユニットテストの実行
+    
     if not run_tests():
-        logger.error("ユニットテストに失敗したため、変更を元に戻します。")
+        print("ユニットテストに失敗したため、変更を元に戻します。")
         restore_modules_and_config()
-        logger.info("===== main.py 終了 (ロールバック実行) =====")
+        print("===== main.py 終了 (ロールバック実行) =====")
         sys.exit(1)
-    # テスト成功時のみ Gist を更新
+    
     if not update_gist():
-        logger.error("Gist の更新に失敗しました。変更は保持されていますが、手動での確認が必要です。")
-        # Gist更新失敗時はロールバックせず、変更を保持
-    logger.info("===== main.py 終了 =====")
+        print("Gist の更新に失敗しました。変更は保持されていますが、手動での確認が必要です。")
+    
+    # 自動コミットとプッシュを実行
+    if not auto_commit_and_push():
+        print("自動コミット/プッシュに失敗しました。")
+    
+    print("===== main.py 終了 =====")

@@ -1,5 +1,5 @@
 import unittest
-from ast_transformer import transform_code
+from modules.ast_transformer import transform_code
 
 class TestASTTransformer(unittest.TestCase):
     def test_simple_assignment(self):
