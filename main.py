@@ -16,15 +16,16 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
+
 def full_cleanup():
     """
     ローカル環境を完全にクリーンアップする関数です。
-    ・logging.shutdown() を実行してログハンドラを閉じる（main.log を解放）
+    ・logging.shutdown() によりログハンドラを閉じ、main.log のロックを解除
     ・Gitリポジトリを HEAD にリセットし、未追跡ファイルを全削除 (git clean -xdf)
     ・バックアップフォルダ、__pycache__、desktop.ini などの不要ファイルを削除する
     ・.gitignore に desktop.ini を追加して以降の追跡から除外する
     """
-    logging.shutdown()  # ログハンドラを閉じ、ログファイルのロックを解除
+    logging.shutdown()  # ログファイルのロック解除
     print("【全環境クリーンアップ開始】")
     
     try:
@@ -79,7 +80,7 @@ def full_cleanup():
                 except Exception as e:
                     print(f"{file_path} の削除に失敗しました: {e}")
     
-    # Git インデックスから、実際にトラッキングされている desktop.ini のみ削除
+    # Git インデックスから、トラッキングされている desktop.ini のみ削除
     if removed_files:
         tracked_files = []
         for file in removed_files:
@@ -111,10 +112,11 @@ def full_cleanup():
     
     print("【全環境クリーンアップ終了】")
 
+
 def fix_test_imports():
     """
     modules/test_ast_transformer.py 内の import 文を自動修正する。
-    'from ast_transformer import' を 'from modules.ast_transformer import' に置換します。
+    'from ast_transformer import' を 'from modules.ast_transformer import' に変更。
     """
     test_file = os.path.join("modules", "test_ast_transformer.py")
     if os.path.exists(test_file):
@@ -129,6 +131,50 @@ def fix_test_imports():
         except Exception as e:
             print(f"test_ast_transformer.py の修正に失敗しました: {e}")
 
+
+def move_test_files():
+    """
+    ファイル名に 'test' が含まれる .py ファイルは、
+    直下、modules、modules.bak から問答無用で test/ フォルダへ移動する。
+    """
+    test_dir = "test"
+    if not os.path.exists(test_dir):
+        os.makedirs(test_dir)
+        print("test/ フォルダを作成しました。")
+    # 直下の test ファイル
+    for filename in os.listdir("."):
+        if filename.endswith(".py") and "test" in filename.lower() and filename not in ("main.py", "config.json", "update_gist.py"):
+            src = filename
+            dst = os.path.join(test_dir, filename)
+            try:
+                shutil.move(src, dst)
+                print(f"{filename} を {dst} に移動しました。")
+            except Exception as e:
+                print(f"{filename} の移動中にエラーが発生しました: {e}")
+    # modules 内の test ファイル
+    if os.path.exists("modules"):
+        for filename in os.listdir("modules"):
+            if filename.endswith(".py") and "test" in filename.lower():
+                src = os.path.join("modules", filename)
+                dst = os.path.join(test_dir, filename)
+                try:
+                    shutil.move(src, dst)
+                    print(f"{filename} を {dst} に移動しました。")
+                except Exception as e:
+                    print(f"{filename} の移動中にエラーが発生しました: {e}")
+    # modules.bak 内の test ファイル
+    if os.path.exists("modules.bak"):
+        for filename in os.listdir("modules.bak"):
+            if filename.endswith(".py") and "test" in filename.lower():
+                src = os.path.join("modules.bak", filename)
+                dst = os.path.join(test_dir, filename)
+                try:
+                    shutil.move(src, dst)
+                    print(f"{filename} を {dst} に移動しました。")
+                except Exception as e:
+                    print(f"{filename} の移動中にエラーが発生しました: {e}")
+
+
 def ensure_init_file():
     """
     modules/ をパッケージとして扱うため、__init__.py の存在を保証する。
@@ -142,9 +188,10 @@ def ensure_init_file():
         except Exception as e:
             print(f"modules/__init__.py の作成に失敗しました: {e}")
 
+
 def ensure_folder_consistency():
     """
-    modules フォルダのバックアップ・重複整理・設定修正を実施する。
+    modules フォルダのバックアップ、重複整理、設定修正を実施する。
     """
     backup_success = True
     if os.path.exists("modules"):
@@ -185,13 +232,12 @@ def ensure_folder_consistency():
         print("modules/ ディレクトリが存在しません。")
     if os.path.exists("modules"):
         ensure_init_file()
-
-    # config.json の gist_files 修正は省略
     return True
+
 
 def move_py_files():
     """
-    main.py、config.json、update_gist.py を除く全ての .py ファイルを modules/ に移動する。
+    main.py、config.json、update_gist.py 以外の .py ファイル（"test" を含まないもの）を modules/ に移動する。
     """
     modules_dir = "modules"
     if not os.path.exists(modules_dir):
@@ -199,7 +245,8 @@ def move_py_files():
         print(f"{modules_dir}/ を作成しました。")
     ensure_init_file()
     for filename in os.listdir("."):
-        if filename.endswith(".py") and filename not in ("main.py", "config.json", "update_gist.py"):
+        if (filename.endswith(".py") and filename not in ("main.py", "config.json", "update_gist.py") 
+            and "test" not in filename.lower()):
             src = filename
             dst = os.path.join(modules_dir, filename)
             try:
@@ -213,13 +260,66 @@ def move_py_files():
                 return False
     return True
 
+
+def update_config():
+    """
+    config.json 内の gist_files エントリのパスを更新する。
+    ファイル名に 'test' が含まれる場合はパスを test/ に変更する。
+    """
+    config_path = "config.json"
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+        except Exception as e:
+            print(f"config.json の読み込みに失敗しました: {e}")
+            return False
+        if "gist_files" in config:
+            updated = False
+            if isinstance(config["gist_files"], list):
+                new_list = []
+                for path in config["gist_files"]:
+                    if isinstance(path, str):
+                        basename = os.path.basename(path)
+                        if "test" in basename.lower():
+                            new_path = os.path.join("test", basename)
+                            updated = True
+                        else:
+                            new_path = path
+                        new_list.append(new_path)
+                    else:
+                        new_list.append(path)
+                config["gist_files"] = new_list
+            elif isinstance(config["gist_files"], dict):
+                for key, path in config["gist_files"].items():
+                    if isinstance(path, str):
+                        basename = os.path.basename(path)
+                        if "test" in basename.lower():
+                            config["gist_files"][key] = os.path.join("test", basename)
+                            updated = True
+            if updated:
+                try:
+                    with open(config_path, "w", encoding="utf-8") as f:
+                        json.dump(config, f, ensure_ascii=False, indent=4)
+                    print("config.json の更新に成功しました。")
+                except Exception as e:
+                    print(f"config.json の更新書き込みに失敗しました: {e}")
+                    return False
+        return True
+    else:
+        print("config.json が存在しません。")
+        return False
+
+
 def run_tests():
     """
-    unittest を実行し、成功なら True を返す。
+    test/ フォルダ内から unittest を探索して実行する。
     """
     try:
-        result = subprocess.run([sys.executable, "-m", "unittest", "discover"],
-                                  capture_output=True, text=True)
+        result = subprocess.run(
+            [sys.executable, "-m", "unittest", "discover", "-s", "test", "-p", "*.py"],
+            capture_output=True, text=True
+        )
         if result.returncode != 0:
             print(f"ユニットテスト失敗:\n{result.stdout}\n{result.stderr}")
             return False
@@ -229,26 +329,11 @@ def run_tests():
         print(f"ユニットテスト実行中に例外が発生しました: {e}")
         return False
 
-def update_gist():
-    """
-    update_gist.py を実行して Gist を更新する。
-    """
-    try:
-        result = subprocess.run([sys.executable, "update_gist.py"],
-                                  capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"Gist 更新スクリプトでエラー発生 (戻り値 {result.returncode}):\n{result.stdout}\n{result.stderr}")
-            return False
-        print("Gist を更新しました。")
-        return True
-    except Exception as e:
-        print(f"Gist の更新処理中に例外が発生しました: {e}")
-        return False
 
 def auto_commit_and_push():
     """
-    変更を自動でコミットし、プッシュする処理です。
-    .git/index.lock が存在する場合は自動で削除します。
+    変更を自動でコミットし、リモートにプッシュする処理です。
+    .git/index.lock が存在する場合は自動で削除し、通常の push で失敗したら強制プッシュも試みる。
     """
     index_lock = os.path.join(".git", "index.lock")
     if os.path.exists(index_lock):
@@ -265,8 +350,15 @@ def auto_commit_and_push():
         print("自動コミットとプッシュが完了しました。")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"自動コミットまたはプッシュに失敗しました: {e}")
-        return False
+        print(f"通常の自動コミットまたはプッシュに失敗しました: {e}")
+        try:
+            subprocess.run(["git", "push", "-f"], check=True)
+            print("強制プッシュで自動コミットとプッシュが完了しました。")
+            return True
+        except subprocess.CalledProcessError as e2:
+            print(f"強制プッシュにも失敗しました: {e2}")
+            return False
+
 
 def restore_modules_and_config():
     """
@@ -294,16 +386,37 @@ def restore_modules_and_config():
         else:
             print("config.json が元々存在しないため、復元は不要です。")
 
+
+def show_git_status():
+    """現在の Git の状態を表示する"""
+    try:
+        result = subprocess.run(["git", "status"], capture_output=True, text=True, check=True)
+        print("=== git status ===")
+        print(result.stdout)
+    except Exception as e:
+        print(f"git status の表示に失敗しました: {e}")
+
+
 if __name__ == "__main__":
     print("===== main.py 開始 =====")
     
-    # すべての環境を根こそぎクリーンアップ
+    # 1. 全環境クリーンアップ
     full_cleanup()
     
-    # テストファイルの import 文を自動修正
+    # 2. テストファイルの import 文自動修正
     fix_test_imports()
     
-    # config.json のバックアップ作成
+    # 3. ファイル名に "test" が含まれる .py ファイルを test/ フォルダへ移動（直下、modules、modules.bak）
+    move_test_files()
+    
+    # 4. main.py、config.json、update_gist.py 以外の *.py ファイルを modules/ へ移動（test 系は除く）
+    if not move_py_files():
+        print("ファイル移動中にエラーが発生しました。ロールバックを実行します。")
+        restore_modules_and_config()
+        print("===== main.py 終了 (ロールバック実行) =====")
+        sys.exit(1)
+    
+    # 5. config.json のバックアップ作成
     if os.path.exists("config.json"):
         try:
             shutil.copy2("config.json", "config.json.bak")
@@ -316,29 +429,23 @@ if __name__ == "__main__":
     else:
         print("config.json が存在しないため、バックアップは不要です。")
     
-    if not ensure_folder_consistency():
-        print("フォルダ構成の整合性確保中にエラーが発生しました。ロールバックを実行します。")
-        restore_modules_and_config()
-        print("===== main.py 終了 (ロールバック実行) =====")
+    # 6. config.json の自動更新（テスト実行前の最後のステップ）
+    if not update_config():
+        print("config.json の更新に失敗しました。")
         sys.exit(1)
     
-    if not move_py_files():
-        print("ファイル移動中にエラーが発生しました。ロールバックを実行します。")
-        restore_modules_and_config()
-        print("===== main.py 終了 (ロールバック実行) =====")
-        sys.exit(1)
-    
+    # 7. test/ フォルダ内からユニットテストを実行
     if not run_tests():
         print("ユニットテストに失敗したため、変更を元に戻します。")
         restore_modules_and_config()
         print("===== main.py 終了 (ロールバック実行) =====")
         sys.exit(1)
     
-    if not update_gist():
-        print("Gist の更新に失敗しました。変更は保持されていますが、手動での確認が必要です。")
-    
-    # 自動コミットとプッシュを実行
+    # 8. 自動コミット＆プッシュ（全ての変更を含む）
     if not auto_commit_and_push():
         print("自動コミット/プッシュに失敗しました。")
+    
+    # 9. git status の結果を表示
+    show_git_status()
     
     print("===== main.py 終了 =====")
