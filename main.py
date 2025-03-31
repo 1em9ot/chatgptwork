@@ -19,10 +19,9 @@ logger.addHandler(console_handler)
 def full_cleanup():
     """
     ローカル環境を完全にクリーンアップする関数です。
-    ※今回は git reset --hard は実行せず、作業ディレクトリの変更は保持します。
+    ※ tracked な変更は保持し、git clean -xdf により未追跡ファイル等を削除します。
     """
-    # ログファイルのロックを解除
-    logging.shutdown()
+    logging.shutdown()  # ログファイルのロック解除
     print("【全環境クリーンアップ開始】")
     
     try:
@@ -31,7 +30,7 @@ def full_cleanup():
     except Exception as e:
         print(f"git clean に失敗しました: {e}")
     
-    # バックアップフォルダとバックアップファイルの削除
+    # バックアップフォルダ・ファイルの削除
     for backup_dir in ["modules.bak"]:
         if os.path.exists(backup_dir):
             try:
@@ -71,7 +70,7 @@ def full_cleanup():
                 except Exception as e:
                     print(f"{file_path} の削除に失敗しました: {e}")
     
-    # Gitインデックスからトラッキング中の desktop.ini の除外
+    # Gitインデックスから、トラッキング中の desktop.ini のみ削除
     if removed_files:
         tracked_files = []
         for file in removed_files:
@@ -323,7 +322,7 @@ def run_tests():
 
 def resolve_merge_conflicts():
     """
-    Git merge コンフリクトが発生している場合、ユーザーに確認して old ブランチ側の内容（ours）を採用する。
+    Git merge コンフリクトが発生している場合、ユーザーに確認して old ブランチ側（ours）の内容を採用する。
     """
     try:
         result = subprocess.run(["git", "diff", "--name-only", "--diff-filter=U"],
@@ -337,7 +336,7 @@ def resolve_merge_conflicts():
         print("以下のファイルでマージコンフリクトが発生しています:")
         for f in conflicted_files:
             print(f"  {f}")
-        answer = input("oldブランチのこみっとOKです。テストも成功しました。mainに、現在のブランチ（old側）を正として通しますか? (y/n): ")
+        answer = input("oldブランチのこみっとOKです。テストも成功しました。mainに、現在のブランチ（old側）の内容でマージしますか? (y/n): ")
         if answer.lower() == 'y':
             for f in conflicted_files:
                 try:
@@ -388,6 +387,42 @@ def auto_commit_and_push():
             return False
 
 
+def merge_into_main():
+    """
+    現在のブランチ（old側）の内容で、リモートの main ブランチにマージし、
+    マージ後に現在のブランチを削除する。
+    ※現在のブランチが main であれば何もせず終了します。
+    """
+    try:
+        current_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                                                   text=True).strip()
+    except Exception as e:
+        print("現在のブランチ名の取得に失敗しました:", e)
+        return False
+    if current_branch == "main":
+        print("現在のブランチは main です。マージは不要です。")
+        return True
+    answer = input(f"oldブランチのこみっとOKです。テストも成功しました。mainに、現在のブランチ（{current_branch}）を正として通しますか? (y/n): ")
+    if answer.lower() != 'y':
+        print("マージがキャンセルされました。")
+        return False
+    try:
+        subprocess.run(["git", "checkout", "main"], check=True)
+        subprocess.run(["git", "merge", current_branch], check=True)
+        subprocess.run(["git", "push"], check=True)
+        print("main にマージし、プッシュしました。")
+    except Exception as e:
+        print("main へのマージに失敗しました:", e)
+        return False
+    try:
+        subprocess.run(["git", "branch", "-d", current_branch], check=True)
+        subprocess.run(["git", "push", "origin", "--delete", current_branch], check=True)
+        print(f"ブランチ {current_branch} を削除しました。")
+    except Exception as e:
+        print(f"ブランチ {current_branch} の削除に失敗しました: {e}")
+    return True
+
+
 def restore_modules_and_config():
     """
     modules/ および config.json をバックアップから復元する。
@@ -428,7 +463,7 @@ def show_git_status():
 if __name__ == "__main__":
     print("===== main.py 開始 =====")
     
-    # 1. 全環境クリーンアップ（※これにより一部の未追跡ファイルは削除されますが、tracked ファイルの変更はそのままです）
+    # 1. 全環境クリーンアップ（※tracked な変更は保持）
     full_cleanup()
     
     # 2. テストファイルの import 文自動修正
@@ -474,7 +509,7 @@ if __name__ == "__main__":
         print("自動コミット/プッシュに失敗しました。")
         sys.exit(1)
     
-    # 9. その後、リモートの main ブランチとのマージを実施（ここで merge コンフリクトが発生していたら解決する）
+    # 9. リモートの main ブランチとマージする
     try:
         subprocess.run(["git", "pull", "origin", "main"], check=True)
         print("リモートの main ブランチをマージしました。")
@@ -486,7 +521,11 @@ if __name__ == "__main__":
             print("自動コミット/プッシュに失敗しました。")
             sys.exit(1)
     
-    # 10. git status の結果を表示
+    # 10. 現在のブランチの内容で main にマージし、マージ後ブランチを削除する
+    if not merge_into_main():
+        print("main へのマージ処理がキャンセルまたは失敗しました。")
+    
+    # 11. git status の結果を表示
     show_git_status()
     
     print("===== main.py 終了 =====")
