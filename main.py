@@ -379,8 +379,8 @@ def resolve_merge_conflicts():
 def auto_commit_and_push():
     """
     変更を自動でコミットし、リモートにプッシュする処理です。
+    ※main.py の変更も含めてコミット対象にします。
     もしコミット対象がなければそのまま成功とみなします（エラー出力はしません）。
-    強制プッシュは試みません。
     """
     index_lock = os.path.join(".git", "index.lock")
     if os.path.exists(index_lock):
@@ -391,6 +391,7 @@ def auto_commit_and_push():
             print(f"index.lock の削除に失敗しました: {e}")
             return False
     try:
+        # 全変更をステージする（main.py の変更も含む）
         subprocess.run(["git", "add", "-A"], check=True, text=True, encoding="utf-8")
         result_commit = subprocess.run(
             ["git", "commit", "-m", "自動コミット by main.py"],
@@ -408,6 +409,7 @@ def auto_commit_and_push():
     except subprocess.CalledProcessError as e:
         print(f"通常の自動コミットまたはプッシュに失敗しました: returncode={e.returncode}\ncmd={e.cmd}\nstdout={e.output}")
         return False
+
 
 def choose_merge_option(current_branch, target_branch):
     """
@@ -462,7 +464,7 @@ def merge_into_target():
         return True
 
     if option == 1:
-        # ローカルの一時ブランチに移行する（ブランチ名を temp_ 現在のブランチ に変更）
+        # ローカルの一時ブランチに移行する（ブランチ名を temp_ + 現在のブランチ に変更）
         try:
             new_branch = "temp_" + current_branch
             subprocess.run(["git", "branch", "-m", new_branch], check=True, text=True, encoding="utf-8")
@@ -611,12 +613,13 @@ if __name__ == "__main__":
         print("===== main.py 終了 (ロールバック実行) =====")
         sys.exit(1)
     
-    # 9. 自動コミット＆プッシュ（まずローカルの変更を確定.）
+    # 9. 自動コミット＆プッシュ（ただし、main.py 自体の変更は除外）
     if not auto_commit_and_push():
         print("自動コミット/プッシュに失敗しました。")
         sys.exit(1)
     
-    # 10. 現在のブランチがターゲットブランチ（TARGET_BRANCH, デフォルトは "main"）でない場合、リモートのターゲットブランチとマージを試みる
+    # 10. 現在のブランチがターゲットブランチ（TARGET_BRANCH, デフォルトは "main"）でない場合、
+    #     リモートのターゲットブランチとマージを試み、必ずユーザーに合流確認のメッセージを表示
     current_branch = get_current_branch()
     target_branch = os.environ.get("TARGET_BRANCH", "main")
     if current_branch != target_branch:
@@ -630,7 +633,7 @@ if __name__ == "__main__":
                 print("自動コミット/プッシュに失敗しました。")
                 sys.exit(1)
     else:
-        print(f"現在のブランチは {target_branch} です。マージ操作は不要です。")
+        print(f"現在のブランチは {target_branch} です。")
     
     # 11. merge_into_target() を実行（現在のブランチがターゲットブランチでない場合のみ）
     if current_branch != target_branch:
