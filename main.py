@@ -403,12 +403,44 @@ def auto_commit_and_push():
             print("変更はありません。自動コミットはスキップします。")
         else:
             print("自動コミット完了。")
-        subprocess.run(["git", "push"], check=True, text=True, encoding="utf-8")
-        print("自動コミットとプッシュが完了しました。")
-        return True
+        try:
+            subprocess.run(["git", "push"], check=True, text=True, encoding="utf-8")
+            print("自動コミットとプッシュが完了しました。")
+            return True
+        except subprocess.CalledProcessError as e:
+            # アップストリームブランチ不一致エラーかどうかチェック
+            error_msg = (e.output or "") + (e.stderr or "")
+            if e.returncode == 128 and "upstream branch" in error_msg.lower():
+                current_branch = get_current_branch()
+                if not current_branch:
+                    print("現在のブランチの取得に失敗しました。")
+                    return False
+                print("アップストリームブランチ名の不一致が検出されました。")
+                print("以下のオプションから選択してください:")
+                print(f"1: 'git push origin HEAD:{current_branch}' を実行する")
+                print("2: 'git push origin HEAD' を実行する (ローカルと同名のリモートブランチにプッシュ)")
+                choice = input("番号を入力してください (1 または 2): ").strip()
+                if choice == "1":
+                    push_cmd = ["git", "push", "origin", f"HEAD:{current_branch}"]
+                elif choice == "2":
+                    push_cmd = ["git", "push", "origin", "HEAD"]
+                else:
+                    print("無効な入力です。push をキャンセルします。")
+                    return False
+                try:
+                    subprocess.run(push_cmd, check=True, text=True, encoding="utf-8")
+                    print("選択した push コマンドが成功しました。")
+                    return True
+                except subprocess.CalledProcessError as e2:
+                    print(f"選択した push コマンドに失敗しました: returncode={e2.returncode}\ncmd={e2.cmd}\nstdout={e2.output}")
+                    return False
+            else:
+                print(f"通常の自動コミットまたはプッシュに失敗しました: returncode={e.returncode}\ncmd={e.cmd}\nstdout={e.output}")
+                return False
     except subprocess.CalledProcessError as e:
         print(f"通常の自動コミットまたはプッシュに失敗しました: returncode={e.returncode}\ncmd={e.cmd}\nstdout={e.output}")
         return False
+
 
 
 def choose_merge_option(current_branch, target_branch):
