@@ -372,7 +372,7 @@ def resolve_merge_conflicts():
                 print(f"マージコンフリクトのコミットに失敗しました: {e}")
         else:
             print("マージ解決がキャンセルされました。手動で解決してください。")
-            sys.exit(1)
+            return
     else:
         print("マージコンフリクトはありません。")
 
@@ -409,12 +409,41 @@ def auto_commit_and_push():
         print(f"通常の自動コミットまたはプッシュに失敗しました: returncode={e.returncode}\ncmd={e.cmd}\nstdout={e.output}")
         return False
 
+def choose_merge_option(current_branch, target_branch):
+    """
+    マージ時のオプションをユーザーに選択させるUIを表示します。
+    オプション:
+      1: ローカルの一時ブランチに移行する
+      2: ローカルの main ブランチにマージする
+      3: リモートの同名ブランチを更新する
+      4: リモートの main ブランチにマージする
+    キャンセル（空入力）の場合は None を返します。
+    """
+    print("マージオプションを選択してください:")
+    print("1: ローカルの一時ブランチに移行する")
+    print("2: ローカルの main ブランチにマージする")
+    print("3: リモートの同名ブランチを更新する")
+    print("4: リモートの main ブランチにマージする")
+    option = input("番号を入力してください (1-4、またはキャンセルなら Enter): ").strip()
+    if option == "":
+        print("マージがキャンセルされました。")
+        return None
+    try:
+        option = int(option)
+    except ValueError:
+        print("無効な入力です。")
+        return None
+    if option not in [1, 2, 3, 4]:
+        print("無効な選択です。")
+        return None
+    return option
+
 def merge_into_target():
     """
-    現在のブランチ（old側）の内容で、リモートのターゲットブランチにマージし、
-    マージ後に現在のブランチを削除する。
-    現在のブランチがターゲットブランチの場合は何もしません。
-    ターゲットブランチは環境変数 TARGET_BRANCH から取得し、設定がなければ "main" を使用します。
+    現在のブランチ（old側）の内容を、選択されたオプションに応じて
+    マージまたは移行します。現在のブランチがターゲットブランチの場合は何もしません。
+    ターゲットブランチは環境変数 TARGET_BRANCH から取得し、なければ "main" を使用します。
+    ユーザーがキャンセルした場合はエラー終了せずにスキップします。
     """
     target_branch = os.environ.get("TARGET_BRANCH", "main")
     try:
@@ -426,24 +455,67 @@ def merge_into_target():
     if current_branch == target_branch:
         print(f"現在のブランチは {target_branch} です。マージは不要です。")
         return True
-    answer = input(f"oldブランチのこみっとOKです。テストも成功しました。{target_branch} に、現在のブランチ（{current_branch}）を正としてマージしますか? (y/n): ")
-    if answer.lower() != 'y':
-        print("マージがキャンセルされました。")
-        return False
-    try:
-        subprocess.run(["git", "checkout", target_branch], check=True, text=True, encoding="utf-8")
-        subprocess.run(["git", "merge", current_branch], check=True, text=True, encoding="utf-8")
-        subprocess.run(["git", "push"], check=True, text=True, encoding="utf-8")
-        print(f"{target_branch} にマージし、プッシュしました。")
-    except Exception as e:
-        print(f"{target_branch} へのマージに失敗しました:", e)
-        return False
-    try:
-        subprocess.run(["git", "branch", "-d", current_branch], check=True, text=True, encoding="utf-8")
-        subprocess.run(["git", "push", "origin", "--delete", current_branch], check=True, text=True, encoding="utf-8")
-        print(f"ブランチ {current_branch} を削除しました。")
-    except Exception as e:
-        print(f"ブランチ {current_branch} の削除に失敗しました: {e}")
+
+    option = choose_merge_option(current_branch, target_branch)
+    if option is None:
+        print("マージ処理をスキップします。")
+        return True
+
+    if option == 1:
+        # ローカルの一時ブランチに移行する（ブランチ名を temp_ 現在のブランチ に変更）
+        try:
+            new_branch = "temp_" + current_branch
+            subprocess.run(["git", "branch", "-m", new_branch], check=True, text=True, encoding="utf-8")
+            print(f"ブランチ名を {new_branch} に変更しました。")
+            subprocess.run(["git", "push", "origin", new_branch], check=True, text=True, encoding="utf-8")
+            print(f"リモートに {new_branch} をプッシュしました。")
+        except Exception as e:
+            print("一時ブランチへの移行に失敗しました:", e)
+            return False
+
+    elif option == 2:
+        # ローカルの main ブランチにマージする
+        try:
+            subprocess.run(["git", "checkout", target_branch], check=True, text=True, encoding="utf-8")
+            subprocess.run(["git", "merge", current_branch], check=True, text=True, encoding="utf-8")
+            subprocess.run(["git", "push"], check=True, text=True, encoding="utf-8")
+            print(f"{target_branch} にマージし、プッシュしました。")
+        except Exception as e:
+            print(f"{target_branch} へのローカルマージに失敗しました:", e)
+            return False
+        try:
+            subprocess.run(["git", "branch", "-d", current_branch], check=True, text=True, encoding="utf-8")
+            subprocess.run(["git", "push", "origin", "--delete", current_branch], check=True, text=True, encoding="utf-8")
+            print(f"ブランチ {current_branch} を削除しました。")
+        except Exception as e:
+            print(f"ブランチ {current_branch} の削除に失敗しました: {e}")
+
+    elif option == 3:
+        # リモートの同名ブランチを更新する（現在のブランチをそのままリモートにプッシュ）
+        try:
+            subprocess.run(["git", "push", "origin", current_branch], check=True, text=True, encoding="utf-8")
+            print(f"リモートの {current_branch} ブランチを更新しました。")
+        except Exception as e:
+            print("リモートブランチの更新に失敗しました:", e)
+            return False
+
+    elif option == 4:
+        # リモートの main ブランチにマージする
+        try:
+            subprocess.run(["git", "checkout", target_branch], check=True, text=True, encoding="utf-8")
+            subprocess.run(["git", "merge", current_branch], check=True, text=True, encoding="utf-8")
+            subprocess.run(["git", "push"], check=True, text=True, encoding="utf-8")
+            print(f"リモートの {target_branch} にマージし、プッシュしました。")
+        except Exception as e:
+            print(f"{target_branch} へのリモートマージに失敗しました:", e)
+            return False
+        try:
+            subprocess.run(["git", "branch", "-d", current_branch], check=True, text=True, encoding="utf-8")
+            subprocess.run(["git", "push", "origin", "--delete", current_branch], check=True, text=True, encoding="utf-8")
+            print(f"ブランチ {current_branch} を削除しました。")
+        except Exception as e:
+            print(f"ブランチ {current_branch} の削除に失敗しました: {e}")
+
     return True
 
 def restore_modules_and_config():
@@ -560,12 +632,11 @@ if __name__ == "__main__":
     else:
         print(f"現在のブランチは {target_branch} です。マージ操作は不要です。")
     
-    # 11. merge_into_target() を実行（オプション：現在のブランチがターゲットブランチでない場合のみ）
+    # 11. merge_into_target() を実行（現在のブランチがターゲットブランチでない場合のみ）
     if current_branch != target_branch:
         if not merge_into_target():
-            print("ブランチのマージに失敗しました。")
-            sys.exit(1)
-    
+            print("ブランチのマージ/移行処理がキャンセルまたは失敗しました。")
+            # エラー終了せずにスキップします。
     # 12. git status の結果を表示
     show_git_status()
     
