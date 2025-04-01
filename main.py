@@ -159,7 +159,7 @@ def move_test_files():
         print("test/ フォルダを作成しました。")
     # 直下の test ファイル
     for filename in os.listdir("."):
-        if filename.endswith(".py") and "test" in filename.lower() and filename not in ("main.py", "config.json", "update_gist.py"):
+        if filename.endswith(".py") and "test" in filename.lower() and filename not in ("main.py", "config.json"):
             src = filename
             dst = os.path.join(test_dir, filename)
             try:
@@ -250,7 +250,7 @@ def ensure_folder_consistency():
 
 def move_py_files():
     """
-    main.py、config.json、update_gist.py 以外の .py ファイル（"test" を含まないもの）を modules/ に移動する。
+    main.py と config.json 以外の .py ファイル（"test" を含まないもの）を modules/ に移動する。
     """
     modules_dir = "modules"
     if not os.path.exists(modules_dir):
@@ -258,7 +258,7 @@ def move_py_files():
         print(f"{modules_dir}/ を作成しました。")
     ensure_init_file()
     for filename in os.listdir("."):
-        if (filename.endswith(".py") and filename not in ("main.py", "config.json", "update_gist.py")
+        if (filename.endswith(".py") and filename not in ("main.py", "config.json")
             and "test" not in filename.lower()):
             src = filename
             dst = os.path.join(modules_dir, filename)
@@ -275,52 +275,26 @@ def move_py_files():
 
 def update_config():
     """
-    config.json 内の gist_files エントリのパスを更新する。
-    ファイル名に 'test' が含まれる場合はパスを test/ に変更する。
+    config.json から Gist 依存の設定（gist_files エントリ）を削除する。
     """
     config_path = "config.json"
     if os.path.exists(config_path):
         try:
             with open(config_path, "r", encoding="utf-8") as f:
                 config = json.load(f)
+            if "gist_files" in config:
+                del config["gist_files"]
+                with open(config_path, "w", encoding="utf-8") as f:
+                    json.dump(config, f, ensure_ascii=False, indent=4)
+                print("config.json から gist_files エントリを削除しました。")
+            else:
+                print("config.json に gist_files エントリは存在しません。")
         except Exception as e:
-            print(f"config.json の読み込みに失敗しました: {e}")
+            print(f"config.json の処理中にエラーが発生しました: {e}")
             return False
-        if "gist_files" in config:
-            updated = False
-            if isinstance(config["gist_files"], list):
-                new_list = []
-                for path in config["gist_files"]:
-                    if isinstance(path, str):
-                        basename = os.path.basename(path)
-                        if "test" in basename.lower():
-                            new_path = os.path.join("test", basename)
-                            updated = True
-                        else:
-                            new_path = path
-                        new_list.append(new_path)
-                    else:
-                        new_list.append(path)
-                config["gist_files"] = new_list
-            elif isinstance(config["gist_files"], dict):
-                for key, path in config["gist_files"].items():
-                    if isinstance(path, str):
-                        basename = os.path.basename(path)
-                        if "test" in basename.lower():
-                            config["gist_files"][key] = os.path.join("test", basename)
-                            updated = True
-            if updated:
-                try:
-                    with open(config_path, "w", encoding="utf-8") as f:
-                        json.dump(config, f, ensure_ascii=False, indent=4)
-                    print("config.json の更新に成功しました。")
-                except Exception as e:
-                    print(f"config.json の更新書き込みに失敗しました: {e}")
-                    return False
-        return True
     else:
-        print("config.json が存在しません。")
-        return False
+        print("config.json が存在しないため、スキップします。")
+    return True
 
 def run_tests():
     """
@@ -379,7 +353,7 @@ def resolve_merge_conflicts():
 def auto_commit_and_push():
     """
     変更を自動でコミットし、リモートにプッシュする処理です。
-    ※main.py の変更も含めてコミット対象にします。
+    ※main.py の変更も含む全変更を対象とします。
     もしコミット対象がなければそのまま成功とみなします（エラー出力はしません）。
     """
     index_lock = os.path.join(".git", "index.lock")
@@ -613,7 +587,7 @@ if __name__ == "__main__":
     # 4. 'test' が名前に含まれる .py ファイルを test/ フォルダへ移動
     move_test_files()
     
-    # 5. main.py、config.json、update_gist.py 以外の .py ファイルを modules/ に移動
+    # 5. main.py と config.json 以外の .py ファイルを modules/ に移動する
     if not move_py_files():
         print("ファイル移動中にエラーが発生しました。ロールバックを実行します。")
         restore_modules_and_config()
@@ -633,7 +607,7 @@ if __name__ == "__main__":
     else:
         print("config.json が存在しないため、バックアップは不要です。")
     
-    # 7. config.json の自動更新（テスト実行前の最後のステップ）
+    # 7. config.json の自動更新（Gist依存の設定を削除）
     if not update_config():
         print("config.json の更新に失敗しました。")
         sys.exit(1)
