@@ -441,8 +441,6 @@ def auto_commit_and_push():
         print(f"通常の自動コミットまたはプッシュに失敗しました: returncode={e.returncode}\ncmd={e.cmd}\nstdout={e.output}")
         return False
 
-
-
 def choose_merge_option(current_branch, target_branch):
     """
     マージ時のオプションをユーザーに選択させるUIを表示します。
@@ -518,9 +516,10 @@ def merge_into_target():
             print(f"{target_branch} へのローカルマージに失敗しました:", e)
             return False
         try:
+            # マージが完了したら、不要になったブランチは削除
             subprocess.run(["git", "branch", "-d", current_branch], check=True, text=True, encoding="utf-8")
-            subprocess.run(["git", "push", "origin", "--delete", current_branch], check=True, text=True, encoding="utf-8")
-            print(f"ブランチ {current_branch} を削除しました。")
+            subprocess.run(["git", "push", "origin", "--delete", current_branch, "--force"], check=True, text=True, encoding="utf-8")
+            print(f"ブランチ {current_branch} をローカルおよびリモートから削除しました。")
         except Exception as e:
             print(f"ブランチ {current_branch} の削除に失敗しました: {e}")
 
@@ -544,14 +543,14 @@ def merge_into_target():
             print(f"{target_branch} へのリモートマージに失敗しました:", e)
             return False
         try:
+            # マージ後、不要な一時ブランチはローカルおよびリモートから削除
             subprocess.run(["git", "branch", "-d", current_branch], check=True, text=True, encoding="utf-8")
-            # --force オプションを追加して、アップストリーム設定に関わらずリモートブランチを削除する
             subprocess.run(["git", "push", "origin", "--delete", current_branch, "--force"], check=True, text=True, encoding="utf-8")
-            print(f"ブランチ {current_branch} をリモートから削除しました。")
+            print(f"ブランチ {current_branch} をローカルおよびリモートから削除しました。")
         except Exception as e:
             print(f"ブランチ {current_branch} の削除に失敗しました: {e}")
 
-        return True
+    return True
 
 def restore_modules_and_config():
     """
@@ -646,7 +645,7 @@ if __name__ == "__main__":
         print("===== main.py 終了 (ロールバック実行) =====")
         sys.exit(1)
     
-    # 9. 自動コミット＆プッシュ（ただし、main.py 自体の変更は除外）
+    # 9. 自動コミット＆プッシュ（main.py の変更も含む）
     if not auto_commit_and_push():
         print("自動コミット/プッシュに失敗しました。")
         sys.exit(1)
