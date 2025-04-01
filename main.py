@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import os
 import sys
 import shutil
@@ -26,7 +28,7 @@ def full_cleanup():
     print("【全環境クリーンアップ開始】")
     
     try:
-        subprocess.run(["git", "clean", "-xdf"], check=True)
+        subprocess.run(["git", "clean", "-xdf"], check=True, text=True, encoding="utf-8")
         print("未追跡ファイル・ディレクトリを削除しました。")
     except Exception as e:
         print(f"git clean に失敗しました: {e}")
@@ -76,12 +78,13 @@ def full_cleanup():
         tracked_files = []
         for file in removed_files:
             result = subprocess.run(["git", "ls-files", "--error-unmatch", file],
-                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                      text=True, encoding="utf-8")
             if result.returncode == 0:
                 tracked_files.append(file)
         if tracked_files:
             try:
-                subprocess.run(["git", "rm", "--cached", "-f"] + tracked_files, check=True)
+                subprocess.run(["git", "rm", "--cached", "-f"] + tracked_files, check=True, text=True, encoding="utf-8")
                 print("Gitインデックスから desktop.ini ファイルを除外しました。")
             except Exception as e:
                 print(f"Gitインデックスからの desktop.ini 除外に失敗: {e}")
@@ -326,7 +329,7 @@ def run_tests():
     try:
         result = subprocess.run(
             [sys.executable, "-m", "unittest", "discover", "-s", "test", "-p", "*.py"],
-            capture_output=True, text=True
+            capture_output=True, text=True, encoding="utf-8"
         )
         if result.returncode != 0:
             print(f"ユニットテスト失敗:\n{result.stdout}\n{result.stderr}")
@@ -343,7 +346,7 @@ def resolve_merge_conflicts():
     """
     try:
         result = subprocess.run(["git", "diff", "--name-only", "--diff-filter=U"],
-                                capture_output=True, text=True, check=True)
+                                capture_output=True, text=True, encoding="utf-8", check=True)
         conflicted_files = result.stdout.splitlines()
     except Exception as e:
         print(f"merge コンフリクトの確認に失敗しました: {e}")
@@ -357,13 +360,13 @@ def resolve_merge_conflicts():
         if answer.lower() == 'y':
             for f in conflicted_files:
                 try:
-                    subprocess.run(["git", "checkout", "--ours", f], check=True)
+                    subprocess.run(["git", "checkout", "--ours", f], check=True, text=True, encoding="utf-8")
                     print(f"{f} のコンフリクトを 'ours' で解決しました。")
                 except Exception as e:
                     print(f"{f} のコンフリクト解決に失敗しました: {e}")
             try:
-                subprocess.run(["git", "add"] + conflicted_files, check=True)
-                subprocess.run(["git", "commit", "-m", "自動マージ解決: oldブランチの内容を採用"], check=True)
+                subprocess.run(["git", "add"] + conflicted_files, check=True, text=True, encoding="utf-8")
+                subprocess.run(["git", "commit", "-m", "自動マージ解決: oldブランチの内容を採用"], check=True, text=True, encoding="utf-8")
                 print("マージコンフリクトを解決し、コミットしました。")
             except Exception as e:
                 print(f"マージコンフリクトのコミットに失敗しました: {e}")
@@ -372,6 +375,7 @@ def resolve_merge_conflicts():
             sys.exit(1)
     else:
         print("マージコンフリクトはありません。")
+
 def auto_commit_and_push():
     """
     変更を自動でコミットし、リモートにプッシュする処理です。
@@ -387,11 +391,10 @@ def auto_commit_and_push():
             print(f"index.lock の削除に失敗しました: {e}")
             return False
     try:
-        subprocess.run(["git", "add", "-A"], check=True)
-        # コミット実行。何も変更がなければ "nothing to commit" と出力されるので、それは成功扱いとする
+        subprocess.run(["git", "add", "-A"], check=True, text=True, encoding="utf-8")
         result_commit = subprocess.run(
             ["git", "commit", "-m", "自動コミット by main.py"],
-            check=False, capture_output=True, text=True, errors="replace"
+            check=False, capture_output=True, text=True, encoding="utf-8", errors="replace"
         )
         stdout_lower = (result_commit.stdout or "").lower()
         stderr_lower = (result_commit.stderr or "").lower()
@@ -399,13 +402,12 @@ def auto_commit_and_push():
             print("変更はありません。自動コミットはスキップします。")
         else:
             print("自動コミット完了。")
-        subprocess.run(["git", "push"], check=True)
+        subprocess.run(["git", "push"], check=True, text=True, encoding="utf-8")
         print("自動コミットとプッシュが完了しました。")
         return True
     except subprocess.CalledProcessError as e:
         print(f"通常の自動コミットまたはプッシュに失敗しました: returncode={e.returncode}\ncmd={e.cmd}\nstdout={e.output}")
         return False
-
 
 def merge_into_target():
     """
@@ -417,7 +419,7 @@ def merge_into_target():
     target_branch = os.environ.get("TARGET_BRANCH", "main")
     try:
         current_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                                                   text=True).strip()
+                                                   text=True, encoding="utf-8").strip()
     except Exception as e:
         print("現在のブランチ名の取得に失敗しました:", e)
         return False
@@ -429,16 +431,16 @@ def merge_into_target():
         print("マージがキャンセルされました。")
         return False
     try:
-        subprocess.run(["git", "checkout", target_branch], check=True)
-        subprocess.run(["git", "merge", current_branch], check=True)
-        subprocess.run(["git", "push"], check=True)
+        subprocess.run(["git", "checkout", target_branch], check=True, text=True, encoding="utf-8")
+        subprocess.run(["git", "merge", current_branch], check=True, text=True, encoding="utf-8")
+        subprocess.run(["git", "push"], check=True, text=True, encoding="utf-8")
         print(f"{target_branch} にマージし、プッシュしました。")
     except Exception as e:
         print(f"{target_branch} へのマージに失敗しました:", e)
         return False
     try:
-        subprocess.run(["git", "branch", "-d", current_branch], check=True)
-        subprocess.run(["git", "push", "origin", "--delete", current_branch], check=True)
+        subprocess.run(["git", "branch", "-d", current_branch], check=True, text=True, encoding="utf-8")
+        subprocess.run(["git", "push", "origin", "--delete", current_branch], check=True, text=True, encoding="utf-8")
         print(f"ブランチ {current_branch} を削除しました。")
     except Exception as e:
         print(f"ブランチ {current_branch} の削除に失敗しました: {e}")
@@ -473,7 +475,7 @@ def restore_modules_and_config():
 def show_git_status():
     """現在の Git の状態を表示する"""
     try:
-        result = subprocess.run(["git", "status"], capture_output=True, text=True, check=True)
+        result = subprocess.run(["git", "status"], capture_output=True, text=True, encoding="utf-8", check=True)
         print("=== git status ===")
         print(result.stdout)
     except Exception as e:
@@ -483,7 +485,7 @@ def get_current_branch():
     try:
         result = subprocess.run(
             ["git", "symbolic-ref", "--short", "HEAD"],
-            capture_output=True, text=True, check=True
+            capture_output=True, text=True, encoding="utf-8", check=True
         )
         return result.stdout.strip()
     except Exception as e:
@@ -547,7 +549,7 @@ if __name__ == "__main__":
     target_branch = os.environ.get("TARGET_BRANCH", "main")
     if current_branch != target_branch:
         try:
-            subprocess.run(["git", "pull", "origin", target_branch], check=True)
+            subprocess.run(["git", "pull", "origin", target_branch], check=True, text=True, encoding="utf-8")
             print(f"リモートの {target_branch} ブランチをマージしました。")
         except subprocess.CalledProcessError as e:
             print(f"git pull でマージコンフリクトが発生しました: {e}")
