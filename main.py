@@ -513,12 +513,13 @@ def merge_into_target():
             return False
         try:
             subprocess.run(["git", "branch", "-d", current_branch], check=True, text=True, encoding="utf-8")
-            subprocess.run(["git", "push", "origin", "--delete", current_branch], check=True, text=True, encoding="utf-8")
-            print(f"ブランチ {current_branch} を削除しました。")
+            # --force オプションを追加して、アップストリーム設定に関わらずリモートブランチを削除する
+            subprocess.run(["git", "push", "origin", "--delete", current_branch, "--force"], check=True, text=True, encoding="utf-8")
+            print(f"ブランチ {current_branch} をリモートから削除しました。")
         except Exception as e:
             print(f"ブランチ {current_branch} の削除に失敗しました: {e}")
 
-    return True
+        return True
 
 def restore_modules_and_config():
     """
